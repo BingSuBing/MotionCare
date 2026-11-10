@@ -19,6 +19,10 @@ import com.carfortable.ui.theme.MotionCareTheme
 import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.DoorArea
 import ai.pleos.playground.vehicle.constant.area.DoorValue
+import androidx.compose.foundation.layout.Column
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
 
@@ -26,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
     // 화면에 보여줄 상태
     private var doorStatus by mutableStateOf("도어 상태 조회 중...")
+    private var firebaseStatus by mutableStateOf("Firebase 연결 중...")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,14 +54,40 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { doorStatus = "오류: ${e.message}" }
             }
         )
+        // 3) Firebase 연결 테스트: 익명 로그인 → Firestore 쓰기
+        FirebaseAuth.getInstance().signInAnonymously()
+            .addOnSuccessListener { result ->
+                val uid = result.user?.uid
+                Log.d(TAG, "익명 로그인 성공: $uid")
+
+                FirebaseFirestore.getInstance()
+                    .collection("test").document("ping")
+                    .set(mapOf(
+                        "from" to "car-emulator",
+                        "uid" to uid,
+                        "at" to FieldValue.serverTimestamp()
+                    ))
+                    .addOnSuccessListener {
+                        Log.d(TAG, "Firestore 쓰기 성공")
+                        firebaseStatus = "Firebase: 연결 성공 ✅"
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "Firestore 쓰기 실패", e)
+                        firebaseStatus = "Firestore 실패: ${e.message}"
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "익명 로그인 실패", e)
+                firebaseStatus = "로그인 실패: ${e.message}"
+            }
 
         setContent {
             MotionCareTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    StatusText(
-                        text = doorStatus,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    Column(modifier = Modifier.padding(innerPadding)) {
+                        StatusText(text = doorStatus)
+                        StatusText(text = firebaseStatus)
+                    }
                 }
             }
         }

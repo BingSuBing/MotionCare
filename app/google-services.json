@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "143302371487",
+    "project_id": "motioncare-fec56",
+    "storage_bucket": "motioncare-fec56.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:143302371487:android:2774020c831b81f3ecdaaa",
+        "android_client_info": {
+          "package_name": "com.carfortable"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsZf4jkWcRAacGQr6P9-KDs0j3QnbOmpk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
