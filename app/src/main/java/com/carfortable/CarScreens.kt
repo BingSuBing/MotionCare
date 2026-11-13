@@ -382,13 +382,20 @@ private fun currentTime(): String = SimpleDateFormat("HH:mm", Locale.KOREA).form
 private fun formatTemp(t: Double): String =
     if (t % 1.0 == 0.0) t.toInt().toString() else t.toString()
 
-// ───────────────────────── 2. 홈 (지도 자리 + 불편 알림 팝업) ─────────────────────────
+// ───────────────────────── 2. 홈 (지도 자리 + 알림 팝업) ─────────────────────────
+
+// 운전자 확인을 기다리는 온도 제안
+data class TempProposal(val median: Double, val voteCount: Int)
 
 @Composable
 fun HomeScreen(
     requests: List<PendingRequest>,
     passengers: List<PassengerItem>,
-    onConfirm: (PendingRequest) -> Unit
+    onConfirm: (PendingRequest) -> Unit,
+    proposal: TempProposal?,
+    approving: Boolean,
+    onApprove: () -> Unit,
+    onDecline: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         // 지도 자리 (내비게이션은 다음 작업)
@@ -403,41 +410,242 @@ fun HomeScreen(
             Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
         }
 
-        // 가장 오래된 알림 하나를 팝업으로
-        requests.firstOrNull()?.let { req ->
-            val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 20.dp)
-                    .widthIn(max = 640.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(CarColors.Alert)
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("♡", fontSize = 24.sp, color = Color(0xFF9A6A3A))
-                Spacer(Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text("$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
-                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
-                    val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
-                    Text("${Seat.label(req.seat)}$more", fontSize = 13.sp, color = CarColors.SubText)
-                }
-                Spacer(Modifier.width(16.dp))
-                Button(
-                    onClick = { onConfirm(req) },
-                    colors = ButtonDefaults.buttonColors(containerColor = CarColors.Green),
-                    shape = RoundedCornerShape(10.dp)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 20.dp)
+                .widthIn(max = 680.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // 1) 가장 오래된 불편 알림 하나
+            requests.firstOrNull()?.let { req ->
+                val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
+                val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
+                AlertBanner(
+                    symbol = "♡",
+                    background = CarColors.Alert,
+                    title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
+                    subtitle = "${Seat.label(req.seat)}$more"
                 ) {
-                    Text("확인")
+                    GreenButton(text = "확인", onClick = { onConfirm(req) })
+                }
+            }
+
+            // 2) 희망 온도 제안 (운전자 확인)
+            proposal?.let { p ->
+                TempProposalBanner(p, approving, onApprove, onDecline)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TempProposalBanner(
+    proposal: TempProposal,
+    approving: Boolean,
+    onApprove: () -> Unit,
+    onDecline: () -> Unit
+) {
+    AlertBanner(
+        symbol = "🌡",
+        background = CarColors.GreenLight,
+        title = "탑승자 희망 온도에 맞춰 ${formatTemp(proposal.median)}℃로 맞출까요?",
+        subtitle = "희망 온도를 보낸 ${proposal.voteCount}명의 중앙값 · 운전석·조수석에 함께 적용"
+    ) {
+        TextButton(onClick = onDecline, enabled = !approving) {
+            Text("나중에", color = CarColors.SubText)
+        }
+        Spacer(Modifier.width(6.dp))
+        GreenButton(text = if (approving) "적용 중..." else "적용", enabled = !approving, onClick = onApprove)
+    }
+}
+
+@Composable
+private fun AlertBanner(
+    symbol: String,
+    background: Color,
+    title: String,
+    subtitle: String,
+    actions: @Composable () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(background)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(symbol, fontSize = 24.sp, color = Color(0xFF9A6A3A))
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
+            Text(subtitle, fontSize = 13.sp, color = CarColors.SubText)
+        }
+        Spacer(Modifier.width(12.dp))
+        actions()
+    }
+}
+
+@Composable
+private fun GreenButton(text: String, onClick: () -> Unit, enabled: Boolean = true) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(containerColor = CarColors.Green),
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Text(text)
+    }
+}
+
+// ───────────────────────── 4. 실내 조율 ─────────────────────────
+
+@Composable
+fun ClimateScreen(
+    passengers: List<PassengerItem>,
+    cabin: CabinState,
+    proposal: TempProposal?,
+    approving: Boolean,
+    airBusy: Boolean,
+    onApprove: () -> Unit,
+    onDecline: () -> Unit,
+    onToggleAir: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("최적의 실내환경 조성하기", fontSize = 26.sp,
+            fontWeight = FontWeight.Bold, color = CarColors.Text)
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // 왼쪽: 탑승자별 희망 온도
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("탑승자별 희망 설정", fontWeight = FontWeight.SemiBold, color = CarColors.Text)
+                if (passengers.isEmpty()) {
+                    Text("참가한 탑승자가 없어요", color = CarColors.SubText)
+                }
+                passengers.forEach { p -> DesireRow(p) }
+            }
+
+            // 오른쪽: 현재 차량 상태 + 제안
+            Column(
+                modifier = Modifier
+                    .weight(1.6f)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(CarColors.GreenLight)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(climateHeadline(cabin, proposal), fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold, color = CarColors.Text)
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    TempCard("운전석", cabin.driverTemp, "현재 설정", Modifier.weight(1f))
+                    TempCard("조수석", cabin.passengerTemp, "현재 설정", Modifier.weight(1f))
+                    TempCard(
+                        "희망 온도 중앙값", cabin.medianTemp,
+                        "${cabin.voteCount}명 기준 · 뒷좌석 포함", Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(CarColors.Card)
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("공기 순환", fontWeight = FontWeight.SemiBold, color = CarColors.Text)
+                        Text(
+                            when (cabin.recirc) {
+                                true -> "내기 순환 중 · 답답하면 외기로 바꿔 주세요"
+                                false -> "외기 유입 중"
+                                null -> "상태 확인 중"
+                            },
+                            fontSize = 13.sp, color = CarColors.SubText
+                        )
+                    }
+                    GreenButton(
+                        text = when {
+                            airBusy -> "적용 중..."
+                            cabin.recirc == false -> "내기로 바꾸기"
+                            else -> "외기로 바꾸기"
+                        },
+                        enabled = !airBusy,
+                        onClick = onToggleAir
+                    )
+                }
+                if (proposal != null) {
+                    TempProposalBanner(proposal, approving, onApprove, onDecline)
                 }
             }
         }
     }
 }
 
-// ───────────────────────── 3~6. 아직 안 만든 탭 (빈 화면) ─────────────────────────
+private fun climateHeadline(cabin: CabinState, proposal: TempProposal?): String = when {
+    proposal != null -> "희망 온도 ${formatTemp(proposal.median)}℃ 적용을 기다리고 있어요"
+    cabin.medianTemp == null -> "탑승자들의 희망 온도를 기다리고 있어요"
+    cabin.tempStatus == "driver_set" -> "운전자가 정한 온도를 유지하고 있어요"
+    else -> "모두가 편안하도록 실내환경을 맞췄어요"
+}
+
+@Composable
+private fun DesireRow(p: PassengerItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(CarColors.Card)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${p.name} · ${Seat.label(p.seat)}", fontWeight = FontWeight.Bold, color = CarColors.Text)
+            Text("멀미 민감도 ${sensitivityLabel(p.sensitivity)}", fontSize = 13.sp, color = CarColors.SubText)
+        }
+        Text(
+            p.desiredTemp?.let { "${formatTemp(it)}°" } ?: "미입력",
+            fontSize = if (p.desiredTemp != null) 24.sp else 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (p.desiredTemp != null) CarColors.Green else CarColors.SubText
+        )
+    }
+}
+
+@Composable
+private fun TempCard(title: String, temp: Double?, caption: String, modifier: Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(CarColors.Card)
+            .padding(16.dp)
+    ) {
+        Text(title, fontWeight = FontWeight.SemiBold, color = CarColors.Text)
+        Spacer(Modifier.height(8.dp))
+        Text(temp?.let { "${formatTemp(it)}℃" } ?: "--", fontSize = 34.sp,
+            fontWeight = FontWeight.Bold, color = CarColors.Text)
+        Spacer(Modifier.height(4.dp))
+        Text(caption, fontSize = 12.sp, color = CarColors.SubText)
+    }
+}
+
+// 웹에서 보내는 값이 정해지면 shared로 옮겨요
+private fun sensitivityLabel(value: String?): String = when (value?.lowercase()) {
+    null, "" -> "미입력"
+    "none" -> "없음"
+    "low" -> "낮음"
+    "mid", "medium", "normal" -> "보통"
+    "high" -> "높음"
+    else -> value.orEmpty()
+}
+
+// ───────────────────────── 아직 안 만든 탭 (빈 화면) ─────────────────────────
 
 @Composable
 fun ComingSoonScreen(tab: CarTab) {
@@ -494,7 +702,11 @@ private fun HomePreview() {
         HomeScreen(
             requests = listOf(PendingRequest("r1", "rear_left", "nausea", null)),
             passengers = listOf(PassengerItem("rear_left", "현아", true)),
-            onConfirm = {}
+            onConfirm = {},
+            proposal = TempProposal(23.0, 2),
+            approving = false,
+            onApprove = {},
+            onDecline = {}
         )
     }
 }
