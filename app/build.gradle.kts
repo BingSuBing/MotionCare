@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
+
+// 개발 세션 ID: local.properties의 devSessionId (커밋 안 됨)
+// 비워 두면 debug는 공용 test01(Paths.DEV_SESSION_ID), release는 항상 무작위 ID
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val devSessionId: String = localProps.getProperty("devSessionId")?.trim().orEmpty()
 
 android {
     namespace = "com.carfortable"
@@ -20,7 +30,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "DEV_SESSION_ID", "\"$devSessionId\"")
+        }
         release {
+            // 제출용 APK는 실행할 때마다 새 세션 ID
+            buildConfigField("String", "DEV_SESSION_ID", "\"\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -37,6 +52,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

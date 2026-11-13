@@ -17,8 +17,8 @@ class SessionManager(private val hvac: HvacController) {
     var sessionId: String? = null
         private set
 
-    // 익명 로그인 → 공조 초기 상태 확인 → sessions/{id} 생성 (carUid = 내 uid)
-    fun start(useDevSession: Boolean, onResult: (Result<String>) -> Unit) {
+    // devSessionId가 있으면 그 ID로, 없으면 6자리 무작위 ID로 세션 생성 (carUid = 내 uid)
+    fun start(devSessionId: String?, onResult: (Result<String>) -> Unit) {
         auth.signInAnonymously()
             .addOnSuccessListener { result ->
                 val carUid = result.user?.uid
@@ -26,30 +26,13 @@ class SessionManager(private val hvac: HvacController) {
                     onResult(Result.failure(IllegalStateException("익명 로그인 uid 없음")))
                     return@addOnSuccessListener
                 }
-                val sid = if (useDevSession) Paths.DEV_SESSION_ID else newSessionId()
-                prepareHvac { driverTemp, passengerTemp, airIntake ->
-                    val data = hashMapOf<String, Any?>(
-                        "carUid" to carUid,
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "active" to true,
-                        "tripTitle" to TRIP_TITLE,
-                        "driverName" to DRIVER_NAME,
-                        "hvacState" to hashMapOf<String, Any?>(
-                            "driverTemp" to driverTemp,
-                            "passengerTemp" to passengerTemp,
-                            "airIntake" to airIntake,
-                            "medianTemp" to null,
-                            "voteCount" to 0,
-                            "tempStatus" to TempStatus.APPLIED,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-                    db.document(Paths.session(sid)).set(data)
-                        .addOnSuccessListener {
-                            sessionId = sid
-                            onResult(Result.success(sid))
-                        }
-                        .addOnFailureListener { e -> onResult(Result.failure(e)) }
+                val sid = devSessionId ?: newSessionId()
+                // 개발 세션은 지난 테스트 데이터를 비우고 시작 (공용 test01은 비우지 않음)
+                val needClear = devSessionId != null && devSessionId != Paths.DEV_SESSION_ID
+                clearSubcollectionsIf(needClear, sid) {
+                    prepareHvac { driverTemp, passengerTemp, airIntake ->
+                        writeSession(sid, carUid, driverTemp, passengerTemp, airIntake, onResult)
+                    }
                 }
             }
             .addOnFailureListener { e -> onResult(Result.failure(e)) }
@@ -60,6 +43,65 @@ class SessionManager(private val hvac: HvacController) {
         val sid = sessionId ?: return onDone()
         db.document(Paths.session(sid)).update("active", false)
             .addOnCompleteListener { onDone() }
+    }
+
+    private fun writeSession(
+        sid: String,
+        carUid: String,
+        driverTemp: Double,
+        passengerTemp: Double,
+        airIntake: String,
+        onResult: (Result<String>) -> Unit
+    ) {
+        val data = hashMapOf<String, Any?>(
+            "carUid" to carUid,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "active" to true,
+            "tripTitle" to TRIP_TITLE,
+            "driverName" to DRIVER_NAME,
+            "hvacState" to hashMapOf<String, Any?>(
+                "driverTemp" to driverTemp,
+                "passengerTemp" to passengerTemp,
+                "airIntake" to airIntake,
+                "medianTemp" to null,
+                "voteCount" to 0,
+                "tempStatus" to TempStatus.APPLIED,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        )
+        db.document(Paths.session(sid)).set(data)
+            .addOnSuccessListener {
+                sessionId = sid
+                onResult(Result.success(sid))
+            }
+            .addOnFailureListener { e -> onResult(Result.failure(e)) }
+    }
+
+    // passengers, requests 하위 문서 삭제 (실패해도 세션 생성은 계속)
+    // ※ Firestore 테스트 모드에서만 동작해요. 보안 규칙(스키마 8장)을 적용하면
+    //   차량 앱은 남의 passengers나 requests를 지울 수 없어서 경고 로그만 남아요.
+    private fun clearSubcollectionsIf(enabled: Boolean, sid: String, next: () -> Unit) {
+        if (!enabled) {
+            next()
+            return
+        }
+        val paths = listOf(Paths.passengers(sid), Paths.requests(sid))
+        var remaining = paths.size
+        paths.forEach { path ->
+            db.collection(path).get()
+                .continueWithTask { task ->
+                    val batch = db.batch()
+                    task.result?.documents?.forEach { batch.delete(it.reference) }
+                    batch.commit()
+                }
+                .addOnCompleteListener { task ->
+                    if (!task.isSuccessful) {
+                        Log.w(TAG, "하위 문서 비우기 실패(보안 규칙 적용 후에는 정상): $path", task.exception)
+                    }
+                    remaining -= 1
+                    if (remaining == 0) next()
+                }
+        }
     }
 
     // 외기/내기는 읽는 함수가 없어서, 시작할 때 내기로 맞추고 그 값을 기록
