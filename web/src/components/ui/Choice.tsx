@@ -64,12 +64,21 @@ export function Chip({
   onClick?: () => void;
   children: ReactNode;
 }) {
+  // onClick이 없으면 누를 수 없는 표시용 칩 (M02 범례)
+  if (!onClick) {
+    return (
+      <span className={`chip${selected ? ' chip--selected' : ''}`}>
+        {selected && <Check size={16} strokeWidth={3} />}
+        {children}
+      </span>
+    );
+  }
   return (
     <button
       type="button"
       className={`chip${selected ? ' chip--selected' : ''}`}
       onClick={onClick}
-      aria-pressed={onClick ? selected : undefined}
+      aria-pressed={selected}
     >
       {selected && <Check size={16} strokeWidth={3} />}
       {children}

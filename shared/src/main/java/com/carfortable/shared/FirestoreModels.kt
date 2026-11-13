@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
+// docs/firestore-schema.md (v0.3.1) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
 // Firestore toObject()를 쓰려면 모든 필드에 기본값이 있어야 해요.
 package com.carfortable.shared
 
@@ -103,6 +103,7 @@ data class RouteInfo( // 2단계
 )
 
 data class Session(
+    val carUid: String = "",              // 세션을 만든 차량 앱의 익명 uid. 생성 시 FirebaseAuth.getInstance().uid 를 넣어요
     val createdAt: Timestamp? = null,
     val active: Boolean = true,
     val tripTitle: String = "",

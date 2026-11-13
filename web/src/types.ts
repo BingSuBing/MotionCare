@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3) 와 1:1로 맞춘 타입이에요.
+// docs/firestore-schema.md (v0.3.1) 와 1:1로 맞춘 타입이에요.
 // 스키마를 바꿀 때는 문서부터 고치고 이 파일을 따라 고쳐요.
 import type { Timestamp } from 'firebase/firestore';
 
@@ -65,6 +65,8 @@ export interface RouteInfo {
 }
 
 export interface Session {
+  /** 세션을 만든 차량 앱의 익명 uid (보안 규칙용, 웹은 읽기만) */
+  carUid: string;
   createdAt: Timestamp;
   active: boolean;
   tripTitle: string;

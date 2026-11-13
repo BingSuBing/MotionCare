@@ -3,7 +3,7 @@
 > 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
-- 버전: **v0.3** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영
+- 버전: **v0.3.1** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영, 차량 식별용 `carUid` 추가
 - 공조 범위: **온도(희망 온도 중앙값) + 외기/내기 전환**. 풍량·바람 방향·조명은 다루지 않아요.
 
 ---
@@ -12,7 +12,7 @@
 
 ```
 sessions/{sessionId}                 ← 차량 앱이 생성 (차 1대 = 세션 1개 = QR 1개)
-├─ (필드) createdAt, active, tripTitle, driverName, hvacState, route
+├─ (필드) carUid, createdAt, active, tripTitle, driverName, hvacState, route
 ├─ passengers/{seat}                 ← 폰이 기록 (좌석당 문서 1개: 이름, 취향, 희망 온도)
 └─ requests/{requestId}              ← 폰이 생성, 차량 앱이 처리 (불편 알리기)
 ```
@@ -28,11 +28,13 @@ QR 스캔 → M00 이름 입력 → M01 참여하기 → M02 좌석 선택 → M
 - **사람 구별**: 폰(브라우저)마다 Firebase **익명 로그인 uid**가 따로 생겨요. 같은 QR로 4명이 들어와도 uid 4개로 구별돼요. 새로고침하거나 QR을 다시 찍어도 같은 uid가 유지돼요.
 - **이름**: M00에서 받은 이름은 앱 안에 들고 있다가, M02에서 좌석을 정할 때 `passengers/{seat}`에 `uid`와 함께 저장해요.
 
+**차량 앱과 폰 구별**: 둘 다 익명 로그인이라 uid만으로는 구별이 안 돼요. 그래서 차량 앱이 세션을 만들 때 **자기 uid를 `carUid`에 남기고**, 보안 규칙은 `request.auth.uid == carUid`이면 차량 앱으로 판단해요. `carUid`는 생성 후 바꿀 수 없어요.
+
 **쓰기 권한 원칙**
 
-| 경로 | 차량 앱 | 폰(웹) |
+| 경로 | 차량 앱 (`uid == carUid`) | 폰(웹) |
 |---|---|---|
-| `sessions/{id}` 생성, `active`, `tripTitle`, `driverName` | ✅ | ❌ |
+| `sessions/{id}` 생성 (`carUid` = 내 uid), `active`, `tripTitle`, `driverName` | ✅ | ❌ |
 | `hvacState`, `route` | ✅ | ❌ (읽기만) |
 | `passengers/{seat}` | 읽기 | ✅ 자기 좌석만 (`uid`가 내 uid) |
 | `requests/{id}` 생성 | ❌ | ✅ |
@@ -115,6 +117,7 @@ https://<프로젝트ID>.web.app/join?session=<sessionId>
 
 | 필드 | 타입 | 쓰는 쪽 | 설명 |
 |---|---|---|---|
+| `carUid` | string | 차량 | 세션을 만든 **차량 앱의 익명 uid**. 생성 시 한 번만 쓰고 바꾸지 않아요. 보안 규칙에서 차량 앱인지 확인할 때 써요 |
 | `createdAt` | Timestamp | 차량 | 세션 생성 시각 |
 | `active` | boolean | 차량 | 이동 중이면 `true`, 끝나면 `false`. 웹은 `false`면 "이동이 끝났어요" 화면을 보여줘요 |
 | `tripTitle` | string | 차량 | M01 카드 제목. 예: "우리 가족 · 서울 → 강릉" |
@@ -229,6 +232,7 @@ Firebase 콘솔에서 직접 만들어요.
 
 ```
 sessions/test01
+  carUid     : "console"   ← 4단계 규칙 적용 후에는 차량 앱의 실제 uid로 바꿔야 차량 앱이 쓸 수 있어요
   createdAt  : (timestamp) 지금
   active     : true
   tripTitle  : "우리 가족 · 서울 → 강릉"
@@ -245,10 +249,61 @@ sessions/test01
 
 ---
 
-## 8. 변경 이력
+## 8. 보안 규칙 초안 (4단계 적용 예정)
+
+Firestore 테스트 모드는 생성 30일 후(12월 중순) 만료돼요. **2차 PT(12/3~4) 전에 적용**해요.
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sessions/{sid} {
+      function signedIn() { return request.auth != null; }
+      function carUidOf() {
+        return get(/databases/$(database)/documents/sessions/$(sid)).data.carUid;
+      }
+
+      allow read: if signedIn();
+      // 차량 앱: 자기 uid를 carUid로 넣어서 생성
+      allow create: if signedIn() && request.resource.data.carUid == request.auth.uid;
+      // 차량 앱만 수정, carUid는 변경 불가
+      allow update: if signedIn() && request.auth.uid == resource.data.carUid
+                    && request.resource.data.carUid == resource.data.carUid;
+      allow delete: if false;
+
+      match /passengers/{seat} {
+        allow read: if signedIn();
+        // 폰: 자기 uid로만 쓰기 (빈 좌석 생성, 내 좌석 수정)
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow update: if signedIn() && resource.data.uid == request.auth.uid
+                      && request.resource.data.uid == request.auth.uid;
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      }
+
+      match /requests/{rid} {
+        allow read: if signedIn();
+        // 폰: 자기 uid, pending 상태로만 생성
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.status == 'pending';
+        // 차량 앱: 상태 변경
+        allow update: if signedIn() && request.auth.uid == carUidOf();
+        allow delete: if false;
+      }
+    }
+  }
+}
+```
+
+- 적용 후 테스트: 폰 웹 개발자 도구에서 `hvacState`를 쓰려고 하면 `permission-denied`가 나야 해요.
+- 콘솔에서 만든 `test01`을 차량 앱으로 계속 쓰려면 `carUid`를 차량 앱 uid로 바꿔야 해요.
+
+---
+
+## 9. 변경 이력
 
 | 버전 | 날짜 | 내용 |
 |---|---|---|
 | v0.1 | 2026-11-12 | 초안 |
 | v0.2 | 2026-11-12 | 좌석별 공조 제약 반영 |
 | v0.3 | 2026-11-13 | 디자인(M01~M09) 반영. 풍량·조명 제외, 희망 온도 중앙값을 실내 전체에 적용(`tempStatus`), 외기는 차량 앱만 제어, QR 1개 + 앱에서 좌석 선택, 이름 입력(M00), 민감도 4단계·시각 케어·휴식 간격, 불편 알리기(`REPORT_DISCOMFORT`) |
+| v0.3.1 | 2026-11-13 | `sessions.carUid` 추가 (보안 규칙에서 차량 앱/폰 구별), 보안 규칙 초안 추가 |
