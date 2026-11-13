@@ -96,11 +96,12 @@ class TempMedianSync(
                         onStatus?.invoke("중앙값 $median℃ 적용 (${voteCount}명)")
                     }
                     is HvacResult.Failure -> {
-                        // 실패하면 tempStatus는 그대로 (웹에 "적용됨"이 잘못 뜨지 않게)
+                        // 실패하면 pending (웹에 "적용됨"이 잘못 뜨지 않게, 다음 변경 때 다시 시도)
                         writeState(
                             median, voteCount,
                             driverTemp = driver?.toDouble(),
-                            passengerTemp = passenger?.toDouble()
+                            passengerTemp = passenger?.toDouble(),
+                            tempStatus = TempStatus.PENDING
                         )
                         onStatus?.invoke("중앙값 $median℃ 적용 실패: ${result.reason}")
                     }

@@ -1,6 +1,13 @@
 import { doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { PASSENGER_DEFAULTS, paths, type Seat } from '../types';
+import {
+  PASSENGER_DEFAULTS,
+  paths,
+  type Seat,
+  type Sensitivity,
+  type SicknessTrigger,
+  type VisualMode,
+} from '../types';
 
 /** 다른 사람이 먼저 그 좌석을 차지했을 때 */
 export class SeatTakenError extends Error {
@@ -55,4 +62,25 @@ export async function claimSeat(opts: {
 /** 이미 좌석이 있는 사람이 이름을 바꿨을 때 */
 export function updatePassengerName(sid: string, seat: Seat, name: string) {
   return updateDoc(doc(db, paths.passenger(sid, seat)), { name, updatedAt: serverTimestamp() });
+}
+
+/** 내 좌석 문서의 설정 저장 (M03~M05). submittedAt 은 제출할 때만 넣어요 */
+export function updateMyPassenger(
+  sid: string,
+  seat: Seat,
+  patch: {
+    sensitivity?: Sensitivity;
+    sicknessTriggers?: SicknessTrigger[];
+    desiredTemp?: number;
+    visualMode?: VisualMode;
+    restIntervalMin?: number | null;
+    submit?: boolean;
+  },
+) {
+  const { submit, ...fields } = patch;
+  return updateDoc(doc(db, paths.passenger(sid, seat)), {
+    ...fields,
+    ...(submit ? { submittedAt: serverTimestamp() } : {}),
+    updatedAt: serverTimestamp(),
+  });
 }

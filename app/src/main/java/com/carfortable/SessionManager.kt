@@ -78,6 +78,8 @@ class SessionManager(private val hvac: HvacController) {
     }
 
     // passengers, requests 하위 문서 삭제 (실패해도 세션 생성은 계속)
+    // ※ Firestore 테스트 모드에서만 동작해요. 보안 규칙(스키마 8장)을 적용하면
+    //   차량 앱은 남의 passengers나 requests를 지울 수 없어서 경고 로그만 남아요.
     private fun clearSubcollectionsIf(enabled: Boolean, sid: String, next: () -> Unit) {
         if (!enabled) {
             next()
@@ -94,7 +96,7 @@ class SessionManager(private val hvac: HvacController) {
                 }
                 .addOnCompleteListener { task ->
                     if (!task.isSuccessful) {
-                        Log.w(TAG, "하위 문서 비우기 실패: $path", task.exception)
+                        Log.w(TAG, "하위 문서 비우기 실패(보안 규칙 적용 후에는 정상): $path", task.exception)
                     }
                     remaining -= 1
                     if (remaining == 0) next()

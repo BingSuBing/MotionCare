@@ -24,6 +24,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import ai.pleos.playground.vehicle.Vehicle
 import com.carfortable.shared.Discomfort
+import com.carfortable.shared.Paths
 import com.carfortable.shared.Seat
 import com.carfortable.ui.theme.MotionCareTheme
 
@@ -49,11 +50,18 @@ class MainActivity : ComponentActivity() {
         v.initialize()
         vehicle = v
 
-        // 2) 세션 생성 (개발 세션 ID는 local.properties의 devSessionId)
+        // 2) 세션 생성
+        //    debug: local.properties의 devSessionId, 없으면 공용 test01
+        //    release: 무작위 6자리 ID
         val hvac = HvacController(v)
         val s = SessionManager(hvac)
         session = s
-        s.start(devSessionId = BuildConfig.DEV_SESSION_ID.ifBlank { null }) { result ->
+        val devSessionId = if (BuildConfig.DEBUG) {
+            BuildConfig.DEV_SESSION_ID.ifBlank { Paths.DEV_SESSION_ID }
+        } else {
+            null
+        }
+        s.start(devSessionId = devSessionId) { result ->
             runOnUiThread {
                 result
                     .onSuccess { sid ->

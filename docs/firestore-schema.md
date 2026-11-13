@@ -1,6 +1,6 @@
 # Firestore 스키마 (MotionCare / 편안타)
 
-> 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
+> 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/src/main/java/com/carfortable/shared/FirestoreModels.kt`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
 - 버전: **v0.3.1** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영, 차량 식별용 `carUid` 추가
@@ -58,8 +58,8 @@ QR 스캔 → M00 이름 입력 → M01 참여하기 → M02 좌석 선택 → M
 차 한 대에 **QR 하나**예요. 좌석은 폰에서 고르니까 URL에 좌석이 없어요.
 
 ```
-https://<프로젝트ID>.web.app/join?session=<sessionId>
-예) https://motioncare-xxxx.web.app/join?session=test01
+https://motioncare-fec56.web.app/join?session=<sessionId>
+예) https://motioncare-fec56.web.app/join?session=test01
 ```
 
 ### 2.3 좌석 `Seat`
@@ -104,6 +104,7 @@ https://<프로젝트ID>.web.app/join?session=<sessionId>
    - **1단계**: 계산하면 바로 적용 → `tempStatus: "applied"`
    - **2단계**: 차량 화면에 "모두의 희망 온도 23℃로 맞출까요?" 원터치 승인 → 승인 전에는 `"pending"`, 승인하면 `"applied"`
    - 운전자가 차량에서 온도를 직접 바꾸면 → `"driver_set"`
+   - 차량 적용에 실패하면(1단계 포함) → `"pending"`. 다음에 희망 온도가 바뀌면 다시 시도해요.
 
 ### 3.3 외기/내기
 
@@ -134,7 +135,7 @@ https://<프로젝트ID>.web.app/join?session=<sessionId>
 | `airIntake` | string | `outside`(외기 유입) \| `recirc`(내기 순환), SDK에서 읽은 값 |
 | `medianTemp` | number \| null | 마지막으로 계산한 희망 온도 중앙값 |
 | `voteCount` | number | 중앙값 계산에 쓴 희망 온도 개수 |
-| `tempStatus` | string | `applied`(적용됨) \| `pending`(운전자 적용 대기) \| `driver_set`(운전자가 직접 설정) |
+| `tempStatus` | string | `applied`(적용됨) \| `pending`(운전자 적용 대기 또는 적용 실패) \| `driver_set`(운전자가 직접 설정) |
 | `updatedAt` | Timestamp | 마지막으로 반영된 시각 |
 
 - 웹 M07의 "현재 실내 온도"는 두 구역이 같으면 그 값, 다르면 평균(0.5℃ 반올림)을 보여줘요.
@@ -242,6 +243,8 @@ sessions/test01
                  updatedAt: (timestamp) 지금 }
 ```
 
+- **테스트 전 정리**: 차량 앱이 `test01`을 다시 만들어도(`set`) 하위 `passengers`, `requests` 문서는 남아요. 예전 희망 온도가 중앙값에 섞이지 않게 콘솔에서 지우고 시작해요. 둘이 동시에 테스트할 땐 서로 알려요.
+- **개인 개발 세션**: `local.properties`에 `devSessionId=subin01`처럼 적으면 debug 빌드가 그 ID로 세션을 만들고, 시작할 때 하위 `passengers`, `requests`를 자동으로 비워요(공용 `test01`은 비우지 않아요). 이 자동 정리는 테스트 모드에서만 동작하고, 보안 규칙(8장)을 적용한 뒤에는 콘솔에서 지워야 해요. release 빌드는 항상 무작위 ID를 써요.
 - **B(웹) 단독 테스트**: 콘솔에서 `hvacState` 값을 바꾸면 M07이 따라 바뀌어야 해요. `passengers/front_right`를 직접 만들면 M02에서 조수석이 "사용 중"이 돼야 해요.
 - **A(차량) 단독 테스트**
   - 온도: `passengers/rear_left`(`desiredTemp: 22`), `passengers/front_right`(`desiredTemp: 24`) 생성 → 23℃로 바뀌어야 해요.
