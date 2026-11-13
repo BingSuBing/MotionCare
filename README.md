@@ -77,7 +77,9 @@ sessions/{sessionId}            ← 차량 앱이 생성 (carUid, tripTitle, dri
    adb forward tcp:8088 tcp:8088
    # 브라우저에서 http://127.0.0.1:8088
    ```
-3. `app` 모듈을 실행하면 세션(개발 중에는 `test01`)이 만들어지고 QR 주소가 화면에 표시돼요.
+3. `app` 모듈을 실행하면 세션(debug 빌드는 `test01`)이 만들어지고 QR 주소가 화면에 표시돼요.
+   - 혼자 테스트할 땐 `local.properties`에 `devSessionId=subin01`처럼 개인 세션 ID를 적어요. 시작할 때 그 세션의 예전 `passengers`, `requests`를 자동으로 비워요.
+   - release 빌드(제출용 APK)는 실행할 때마다 무작위 6자리 세션 ID를 만들어요.
 
 > 온도가 안 바뀌면: 하단 바가 꺼짐이면 공조 전원이 꺼진 상태예요. 앱도 하단 바도 반응이 없으면 에뮬레이터를 Cold Boot 해요.
 
