@@ -2,43 +2,40 @@ package com.carfortable
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import ai.pleos.playground.vehicle.Vehicle
-import com.carfortable.shared.Discomfort
 import com.carfortable.shared.Paths
-import com.carfortable.shared.Seat
 import com.carfortable.ui.theme.MotionCareTheme
 
 class MainActivity : ComponentActivity() {
 
     private var vehicle: Vehicle? = null
+    private var hvac: HvacController? = null
     private var session: SessionManager? = null
     private var tempSync: TempMedianSync? = null
     private var requestSync: CareRequestSync? = null
+    private var watcher: SessionWatcher? = null
 
-    // 화면에 보여줄 상태
-    private var sessionStatus by mutableStateOf("세션 준비 중...")
+    // 화면 상태
+    private var started by mutableStateOf(false)          // false: 메인(QR) 화면, true: 여정 화면
+    private var tab by mutableStateOf(CarTab.HOME)
+    private var sessionId by mutableStateOf<String?>(null)
     private var joinUrl by mutableStateOf("")
-    private var tempStatus by mutableStateOf("희망 온도 대기 중...")
+    private var sessionError by mutableStateOf<String?>(null)
+    private var passengers by mutableStateOf<List<PassengerItem>>(emptyList())
+    private var cabin by mutableStateOf(CabinState())
+    private var airBusy by mutableStateOf(false)
     private var pendingRequests by mutableStateOf<List<PendingRequest>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,8 +50,9 @@ class MainActivity : ComponentActivity() {
         // 2) 세션 생성
         //    debug: local.properties의 devSessionId, 없으면 공용 test01
         //    release: 무작위 6자리 ID
-        val hvac = HvacController(v)
-        val s = SessionManager(hvac)
+        val h = HvacController(v)
+        hvac = h
+        val s = SessionManager(h)
         session = s
         val devSessionId = if (BuildConfig.DEBUG) {
             BuildConfig.DEV_SESSION_ID.ifBlank { Paths.DEV_SESSION_ID }
@@ -65,14 +63,15 @@ class MainActivity : ComponentActivity() {
             runOnUiThread {
                 result
                     .onSuccess { sid ->
-                        sessionStatus = "세션: $sid ✅"
+                        sessionId = sid
                         joinUrl = SessionManager.joinUrl(sid)
-                        startTempSync(sid, hvac)
+                        startWatcher(sid)
+                        startTempSync(sid, h)
                         startRequestSync(sid)
                     }
                     .onFailure { e ->
                         Log.e(TAG, "세션 생성 실패", e)
-                        sessionStatus = "세션 실패: ${e.message}"
+                        sessionError = "세션 실패\n${e.message}"
                     }
             }
         }
@@ -80,18 +79,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             MotionCareTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Column(modifier = Modifier.padding(innerPadding)) {
-                        StatusText(text = sessionStatus)
-                        if (joinUrl.isNotEmpty()) {
-                            StatusText(text = joinUrl)
-                        }
-                        StatusText(text = tempStatus)
-                        StatusText(text = "불편 알림 ${pendingRequests.size}건")
-                        pendingRequests.forEach { req ->
-                            RequestRow(
-                                text = "${Seat.label(req.seat)} · ${Discomfort.label(req.value)}",
-                                onConfirm = { requestSync?.acknowledge(req.id) }
+                    Box(modifier = Modifier.padding(innerPadding)) {
+                        if (!started) {
+                            LobbyScreen(
+                                sessionId = sessionId,
+                                joinUrl = joinUrl,
+                                errorText = sessionError,
+                                driverName = SessionManager.DRIVER_NAME,
+                                passengers = passengers,
+                                onRemove = { p -> watcher?.removePassenger(p.seat) },
+                                onStart = { started = true }
                             )
+                        } else {
+                            CarShell(
+                                tab = tab,
+                                onTab = { tab = it },
+                                cabin = cabin,
+                                airBusy = airBusy,
+                                onToggleAir = { toggleAirIntake() }
+                            ) {
+                                when (tab) {
+                                    CarTab.HOME -> HomeScreen(
+                                        requests = pendingRequests,
+                                        passengers = passengers,
+                                        onConfirm = { req -> requestSync?.acknowledge(req.id) }
+                                    )
+                                    else -> ComingSoonScreen(tab)
+                                }
+                            }
                         }
                     }
                 }
@@ -99,15 +114,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 3) 희망 온도 중앙값 적용 시작
+    // 3) 탑승자 목록·실내 상태 구독 (화면 표시용)
+    private fun startWatcher(sid: String) {
+        val w = SessionWatcher(sid)
+        w.onPassengers = { items -> runOnUiThread { passengers = items } }
+        w.onCabin = { state -> runOnUiThread { cabin = state } }
+        w.start()
+        watcher = w
+    }
+
+    // 4) 희망 온도 중앙값 적용 시작
     private fun startTempSync(sid: String, hvac: HvacController) {
         val sync = TempMedianSync(sid, hvac)
-        sync.onStatus = { text -> runOnUiThread { tempStatus = text } }
+        sync.onStatus = { text -> Log.d(TAG, "온도 동기화: $text") }
         sync.start()
         tempSync = sync
     }
 
-    // 4) 불편 알림 구독 시작
+    // 5) 불편 알림 구독 시작
     private fun startRequestSync(sid: String) {
         val sync = CareRequestSync(sid)
         sync.onChange = { items -> runOnUiThread { pendingRequests = items } }
@@ -115,8 +139,31 @@ class MainActivity : ComponentActivity() {
         requestSync = sync
     }
 
+    // 하단바 외기/내기 버튼: 차량에 먼저 적용하고, 성공하면 Firestore에 기록
+    private fun toggleAirIntake() {
+        val h = hvac ?: return
+        val w = watcher ?: return
+        if (airBusy) return
+        val nextRecirc = !(cabin.recirc ?: true)
+        airBusy = true
+        h.setAirIntake(nextRecirc) { result ->
+            runOnUiThread {
+                airBusy = false
+                when (result) {
+                    is HvacResult.Success -> w.writeAirIntake(nextRecirc)
+                    is HvacResult.Failure -> {
+                        Log.e(TAG, "외기/내기 전환 실패: ${result.reason} ${result.message}")
+                        Toast.makeText(this, "외기/내기 전환에 실패했어요", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         // 구독·SDK 해제 (세션 종료는 나중에 종료 버튼으로)
+        watcher?.stop()
+        watcher = null
         tempSync?.stop()
         tempSync = null
         requestSync?.stop()
@@ -128,30 +175,5 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MotionCare"
-    }
-}
-
-@Composable
-fun StatusText(text: String, modifier: Modifier = Modifier) {
-    Text(text = text, modifier = modifier)
-}
-
-// 불편 알림 한 줄 (임시 화면, 다음 작업에서 피그마 레이아웃으로 교체)
-@Composable
-fun RequestRow(text: String, onConfirm: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(text = text)
-        Spacer(modifier = Modifier.width(12.dp))
-        Button(onClick = onConfirm) {
-            Text(text = "확인")
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun StatusTextPreview() {
-    MotionCareTheme {
-        RequestRow(text = "뒷좌석 왼쪽 · 메스꺼워요", onConfirm = {})
     }
 }
