@@ -10,47 +10,63 @@ object Seat {
     const val REAR_LEFT = "rear_left"
     const val REAR_RIGHT = "rear_right"
     val ALL = listOf(FRONT_RIGHT, REAR_LEFT, REAR_RIGHT)
+
+    fun label(seat: String) = when (seat) {
+        FRONT_RIGHT -> "조수석"
+        REAR_LEFT -> "뒷좌석 왼쪽"
+        REAR_RIGHT -> "뒷좌석 오른쪽"
+        else -> seat
+    }
 }
 
 object AirIntake {
-    const val OUTSIDE = "outside" // 외기 유입 (환기)
+    const val OUTSIDE = "outside" // 외기 유입
     const val RECIRC = "recirc"   // 내기 순환
 }
 
+object TempStatus {
+    const val APPLIED = "applied"       // 중앙값 적용됨
+    const val PENDING = "pending"       // 운전자 적용 대기 (2단계)
+    const val DRIVER_SET = "driver_set" // 운전자가 직접 설정
+}
+
 object RequestType {
-    const val SET_AIR_INTAKE = "SET_AIR_INTAKE"
+    const val REPORT_DISCOMFORT = "REPORT_DISCOMFORT"
 }
 
 object RequestStatus {
-    const val PENDING = "pending"
-    const val DONE = "done"
+    const val PENDING = "pending" // 전달됨
+    const val DONE = "done"       // 운전자 확인
     const val FAILED = "failed"
 }
 
-object FailReason {
-    const val SDK_ERROR = "sdk_error"
-    const val SUPERSEDED = "superseded"
-    const val UNSUPPORTED = "unsupported"
-    const val DECLINED = "declined" // 2단계: 운전자가 승인하지 않음
+object Discomfort {
+    const val NAUSEA = "nausea" // 메스꺼워요 → 알림 + TTS, 외기 제안
+    const val COLD = "cold"     // 너무 추워요 → +1℃ 제안
+    const val HOT = "hot"       // 너무 더워요 → -1℃ 제안
+    const val STUFFY = "stuffy" // 답답해요 → 외기 제안
+    const val REST = "rest"     // 잠깐 쉬고 싶어요 → 알림 + TTS, (2단계) 휴게소 추천
+
+    fun label(v: String) = when (v) {
+        NAUSEA -> "메스꺼워요"
+        COLD -> "너무 추워요"
+        HOT -> "너무 더워요"
+        STUFFY -> "답답해요"
+        REST -> "잠깐 쉬고 싶어요"
+        else -> v
+    }
 }
 
-object SicknessLevel {
-    const val OK = "ok"
-    const val MILD = "mild"
-    const val SEVERE = "severe"
-}
-
-/** 희망 온도 허용 범위 (SDK 범위 16~30℃보다 좁게) */
 object Limits {
     const val TEMP_MIN = 18.0
     const val TEMP_MAX = 26.0
-    const val TEMP_STEP = 0.5
-    const val APPLY_DEBOUNCE_MS = 3_000L // 마지막 변경 후 3초 뒤 적용
+    const val TEMP_ROUND_STEP = 0.5
+    const val APPLY_DEBOUNCE_MS = 3_000L // 마지막 변경 후 3초 뒤 계산
 }
 
-/** 0.5 단위 반올림 + 허용 범위로 제한 */
+/** 0.5 단위 반올림 + 허용 범위로 제한 (웹 types.ts 의 clampTemp 와 같은 규칙) */
 fun clampTemp(t: Double): Double =
-    ((t / Limits.TEMP_STEP).roundToInt() * Limits.TEMP_STEP)
+    ((t / Limits.TEMP_ROUND_STEP).roundToInt() * Limits.TEMP_ROUND_STEP)
         .coerceIn(Limits.TEMP_MIN, Limits.TEMP_MAX)
 
 /** 희망 온도 중앙값. 희망 온도가 없으면 null (웹 types.ts 의 medianTemp 와 같은 규칙) */
@@ -68,11 +84,13 @@ data class HvacState(
     val airIntake: String = AirIntake.RECIRC,
     val medianTemp: Double? = null,
     val voteCount: Int = 0,
+    val tempStatus: String = TempStatus.APPLIED,
     val updatedAt: Timestamp? = null,
 )
 
 data class RestStop(
     val name: String = "",
+    val distanceKm: Double = 0.0,
     val etaMin: Int = 0,
 )
 
@@ -80,7 +98,6 @@ data class RouteInfo( // 2단계
     val destinationName: String = "",
     val eta: Timestamp? = null,
     val remainingMin: Int = 0,
-    val restIntervalMin: Int = 50,
     val nextRestStop: RestStop? = null,
     val updatedAt: Timestamp? = null,
 )
@@ -88,6 +105,8 @@ data class RouteInfo( // 2단계
 data class Session(
     val createdAt: Timestamp? = null,
     val active: Boolean = true,
+    val tripTitle: String = "",
+    val driverName: String = "",
     val hvacState: HvacState? = null,
     val route: RouteInfo? = null,
 )
@@ -95,10 +114,14 @@ data class Session(
 data class Passenger(
     val uid: String = "",
     val name: String = "",
-    val desiredTemp: Double? = null,      // 희망 온도, null이면 투표 안 함
-    val sensitivity: String = "medium",   // low | medium | high
-    val sicknessLevel: String = SicknessLevel.OK,
-    val visualMode: String = "off",       // off | dot | horizon
+    val sensitivity: String? = null,                 // none | low | medium | high
+    val sicknessTriggers: List<String> = emptyList(), // video | screen
+    val desiredTemp: Double? = null,                 // 18~26, null = 아직 안 정함
+    val visualMode: String = "dot",                  // off | dot | horizon | minimal
+    val visualIntensity: Int = 30,                   // 0~100
+    val restIntervalMin: Int? = 60,                  // 30 | 60 | 90, null = 꺼짐
+    val joinedAt: Timestamp? = null,
+    val submittedAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
 )
 
@@ -106,9 +129,8 @@ data class CareRequest(
     val seat: String = "",
     val uid: String = "",
     val type: String = "",
-    val value: String = "",               // outside | recirc
+    val value: String = "",                // Discomfort 값
     val status: String = RequestStatus.PENDING,
-    val reason: String? = null,
     val createdAt: Timestamp? = null,
     val handledAt: Timestamp? = null,
 )

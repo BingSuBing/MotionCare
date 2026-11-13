@@ -1,40 +1,42 @@
-# Firestore 스키마 (MotionCare)
+# Firestore 스키마 (MotionCare / 편안타)
 
 > 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
-- 버전: v0.2 (작성: 이수빈)
-- 공조 범위 수정 : **온도 조절 + 외기/내기 전환**만 다뤄요. 풍량은 다루지 않아요.
+- 버전: **v0.3** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영
+- 공조 범위: **온도(희망 온도 중앙값) + 외기/내기 전환**. 풍량·바람 방향·조명은 다루지 않아요.
 
 ---
 
 ## 1. 전체 구조
 
 ```
-sessions/{sessionId}                 ← 차량 앱이 생성
-├─ (필드) createdAt, active, hvacState, route
-├─ passengers/{seat}                 ← 폰이 기록 (좌석당 문서 1개, 희망 온도 포함)
-└─ requests/{requestId}              ← 폰이 생성, 차량 앱이 status 변경 (외기/내기 전환)
+sessions/{sessionId}                 ← 차량 앱이 생성 (차 1대 = 세션 1개 = QR 1개)
+├─ (필드) createdAt, active, tripTitle, driverName, hvacState, route
+├─ passengers/{seat}                 ← 폰이 기록 (좌석당 문서 1개: 이름, 취향, 희망 온도)
+└─ requests/{requestId}              ← 폰이 생성, 차량 앱이 처리 (불편 알리기)
 ```
 
-**온도와 외기는 방식이 달라요**
+**사용자 흐름 (동승자 폰)**
 
-| 기능 | 폰이 하는 일 | 차량 앱이 하는 일 |
-|---|---|---|
-| 온도 | 자기 좌석의 **희망 온도**(`passengers/{seat}.desiredTemp`)를 저장 | 모든 희망 온도의 **중앙값**을 계산해서 적용 |
-| 외기/내기 | `requests`에 전환 요청을 남김 | 요청을 받아 실행하고 `done`/`failed` 기록 |
+```
+QR 스캔 → M00 이름 입력 → M01 참여하기 → M02 좌석 선택 → M03 민감도
+       → M04 희망 온도 → M05 시각 케어·휴식 → M06 제출 완료
+       → M07 이동 중 홈 ⇄ M08 불편 알리기 → M09 전달 완료
+```
 
-온도는 "여러 사람의 의견을 모으는" 기능이라 상태(희망 온도)로 저장하고, 외기 전환은 "한 번 실행하는" 명령이라 요청으로 남겨요.
+- **사람 구별**: 폰(브라우저)마다 Firebase **익명 로그인 uid**가 따로 생겨요. 같은 QR로 4명이 들어와도 uid 4개로 구별돼요. 새로고침하거나 QR을 다시 찍어도 같은 uid가 유지돼요.
+- **이름**: M00에서 받은 이름은 앱 안에 들고 있다가, M02에서 좌석을 정할 때 `passengers/{seat}`에 `uid`와 함께 저장해요.
 
 **쓰기 권한 원칙**
 
 | 경로 | 차량 앱 | 폰(웹) |
 |---|---|---|
-| `sessions/{id}` 생성, `active` | ✅ | ❌ |
+| `sessions/{id}` 생성, `active`, `tripTitle`, `driverName` | ✅ | ❌ |
 | `hvacState`, `route` | ✅ | ❌ (읽기만) |
-| `passengers/{seat}` | 읽기 | ✅ 자기 좌석만 |
+| `passengers/{seat}` | 읽기 | ✅ 자기 좌석만 (`uid`가 내 uid) |
 | `requests/{id}` 생성 | ❌ | ✅ |
-| `requests/{id}` 의 `status`, `reason`, `handledAt` | ✅ | ❌ |
+| `requests/{id}`의 `status`, `handledAt` | ✅ | ❌ |
 
 1단계에서는 Firestore가 테스트 모드라서 이 원칙이 강제되지 않아요. 코드는 처음부터 이 원칙대로 짜고, 4단계에서 `firestore.rules`로 막아요.
 
@@ -47,30 +49,32 @@ sessions/{sessionId}                 ← 차량 앱이 생성
 - 소문자와 숫자로 된 **6자리**예요. 예: `a8f3k2`
 - 차량 앱이 실행될 때 만들어요.
 - 헷갈리기 쉬운 문자(`0 o 1 l i`)는 빼는 걸 권장해요.
-- **개발용 고정 세션: `test01`** (QR 없이 테스트할 때 써요)
+- **개발용 고정 세션: `test01`**
 
-### 2.2 좌석 `Seat`
+### 2.2 QR / 접속 URL
 
-| 값 | 의미 |
+차 한 대에 **QR 하나**예요. 좌석은 폰에서 고르니까 URL에 좌석이 없어요.
+
+```
+https://<프로젝트ID>.web.app/join?session=<sessionId>
+예) https://motioncare-xxxx.web.app/join?session=test01
+```
+
+### 2.3 좌석 `Seat`
+
+| 값 | 화면 표기 |
 |---|---|
 | `front_right` | 조수석 |
 | `rear_left` | 뒷좌석 왼쪽 |
 | `rear_right` | 뒷좌석 오른쪽 |
 
-운전석은 쓰지 않아요. 운전자는 폰으로 조작하지 않아요.
+- 운전석은 선택할 수 없어요. M02에서는 `driverName`으로 "건호 · 사용 중"이라고 표시만 해요.
+- `passengers/{seat}` 문서가 있으면 그 좌석은 **사용 중**이에요.
 
-### 2.3 시간
+### 2.4 시간
 
 - 모든 시간 필드는 Firestore `Timestamp`예요.
-- 쓸 때는 **서버 시간**을 넣어요.
-  - Kotlin: `FieldValue.serverTimestamp()`
-  - TS: `serverTimestamp()`
-
-### 2.4 QR / 접속 URL
-
-```
-https://motioncare-fec56.web.app/join?session=<sessionId>&seat=<Seat>
-```
+- 쓸 때는 **서버 시간**을 넣어요. Kotlin은 `FieldValue.serverTimestamp()`, TS는 `serverTimestamp()`를 써요.
 
 ---
 
@@ -78,32 +82,32 @@ https://motioncare-fec56.web.app/join?session=<sessionId>&seat=<Seat>
 
 ### 3.1 차량 제약 (Pleos 에뮬레이터 확인 결과)
 
-| 기능 | 운전석 | 조수석 | 뒷좌석 |
-|---|---|---|---|
-| 온도 (SDK 16~30℃) | 개별 | 개별 | ❌ 전용 구역 없음 |
-| 외기/내기 | 공통 | 공통 | 공통 |
+| 기능 | 운전석 | 조수석 | 뒷좌석 | 사용 |
+|---|---|---|---|---|
+| 온도 (SDK 16~30℃) | 개별 | 개별 | ❌ 전용 구역 없음 | ✅ |
+| 외기/내기 | 공통 | 공통 | 공통 | ✅ (SDK 지원 A 확인 필요) |
+| 풍량, 바람 방향, 전원/A/C, 김서림, 조명 | | | | ❌ 제외 |
 
-### 3.2 온도: 희망 온도 중앙값
+### 3.2 온도: 모두의 희망 온도 중앙값
 
-1. 동승자가 폰에서 자기 **희망 온도**를 정하면 `passengers/{seat}.desiredTemp`에 저장돼요.
-2. 차량 앱은 `passengers`를 구독하다가 값이 바뀌면 **중앙값**을 다시 계산해요.
+1. 각 동승자가 M04에서 **희망 온도**를 정해요. 웹 버튼은 **1℃ 단위**, 범위는 **18~26℃**예요. 값은 `passengers/{seat}.desiredTemp`에 저장돼요.
+2. 차량 앱은 `passengers`를 구독하다가 값이 바뀌면 **중앙값**을 계산해요.
    - 대상: `desiredTemp`가 `null`이 아닌 좌석만
-   - 홀수 명: 가운데 값 / 짝수 명: 가운데 두 값의 평균
-   - 결과를 **0.5℃ 단위로 반올림**하고 **18~26℃로 제한**해요
-   - 예: [20, 22, 25] → 22 / [20, 23] → 21.5
-3. 계산한 값을 **운전석과 조수석 구역 둘 다**에 적용해요. 뒷좌석 전용 구역이 없어서 앞 두 구역을 맞춰야 뒷좌석까지 같은 온도가 돼요.
-4. 결과를 `hvacState`에 기록해요(`driverTemp`, `passengerTemp`, `medianTemp`, `voteCount`).
+   - 홀수 명이면 가운데 값, 짝수 명이면 가운데 두 값의 평균
+   - **0.5℃ 단위로 반올림**하고 **18~26℃로 제한**해요
+   - 예: [20, 22, 25] → 22 / [22, 24] → 23
+3. 계산한 값을 **운전석·조수석 구역 둘 다**에 적용해요. 앞뒤를 나누지 않고 실내 전체를 한 온도로 맞춰요.
+4. 마지막 변경 후 **3초** 뒤에 계산해요(연타 방지).
+5. 적용 방식
+   - **1단계**: 계산하면 바로 적용 → `tempStatus: "applied"`
+   - **2단계**: 차량 화면에 "모두의 희망 온도 23℃로 맞출까요?" 원터치 승인 → 승인 전에는 `"pending"`, 승인하면 `"applied"`
+   - 운전자가 차량에서 온도를 직접 바꾸면 → `"driver_set"`
 
-- **연속 변경 방지**: 마지막 변경 후 **3초** 동안 추가 변경이 없을 때 계산하고 적용해요. 버튼을 여러 번 눌러도 한 번만 적용돼요.
-- 희망 온도가 하나도 없으면 아무것도 바꾸지 않아요.
-- 2단계: 적용 전에 차량 화면에 "동승자 희망 온도 22.5℃로 맞출까요?" 원터치 승인을 띄워요. 1단계 시연에서는 바로 적용해요.
+### 3.3 외기/내기
 
-### 3.3 외기/내기 전환
-
-- 값: `outside`(외기 유입, 환기) / `recirc`(내기 순환)
-- 동승자 누구나 요청할 수 있고, 마지막 요청이 적용돼요.
-- 멀미에는 환기가 도움이 되므로 "멀미나요"(2단계)와 함께 외기 전환을 제안할 수 있어요.
-- ⚠️ **A 확인**: Vehicle SDK로 외기/내기 전환이 되는지 확인 필요. 안 되면 이 기능은 "차량 화면 안내만" 하도록 바꿔요.
+- **폰에는 외기 버튼이 없어요.** 차량 앱(운전자)만 바꿔요.
+- 동승자가 M08에서 "답답해요"나 "메스꺼워요"를 보내면, 차량 앱이 운전자에게 **외기 전환을 원터치로 제안**해요.
+- 현재 상태는 `hvacState.airIntake`에 기록하고, 폰 M07에서 "외기 유입 중 / 내기 순환 중"으로 보여줘요.
 
 ---
 
@@ -112,23 +116,26 @@ https://motioncare-fec56.web.app/join?session=<sessionId>&seat=<Seat>
 | 필드 | 타입 | 쓰는 쪽 | 설명 |
 |---|---|---|---|
 | `createdAt` | Timestamp | 차량 | 세션 생성 시각 |
-| `active` | boolean | 차량 | 이동 중이면 `true`, 끝나면 `false`. 웹은 `false`면 "종료된 세션" 화면을 보여줘요 |
-| `hvacState` | map | 차량 | 현재 **실제** 공조 값 (아래 4.1) |
+| `active` | boolean | 차량 | 이동 중이면 `true`, 끝나면 `false`. 웹은 `false`면 "이동이 끝났어요" 화면을 보여줘요 |
+| `tripTitle` | string | 차량 | M01 카드 제목. 예: "우리 가족 · 서울 → 강릉" |
+| `driverName` | string | 차량 | M01 "건호님의 차량에서 초대했어요", M02 운전석 "건호 · 사용 중" |
+| `hvacState` | map | 차량 | 현재 공조 상태 (아래 4.1) |
 | `route` | map \| 없음 | 차량 | 2단계. 경로 정보 (아래 4.2) |
 
 ### 4.1 `hvacState`
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `driverTemp` | number | 운전석 구역 실제 설정 온도(℃), SDK에서 읽은 값 |
-| `passengerTemp` | number | 조수석 구역 실제 설정 온도(℃), SDK에서 읽은 값 |
-| `airIntake` | string | `outside` \| `recirc`, SDK에서 읽은 값 |
+| `driverTemp` | number | 운전석 구역 실제 온도(℃), SDK에서 읽은 값 |
+| `passengerTemp` | number | 조수석 구역 실제 온도(℃), SDK에서 읽은 값 |
+| `airIntake` | string | `outside`(외기 유입) \| `recirc`(내기 순환), SDK에서 읽은 값 |
 | `medianTemp` | number \| null | 마지막으로 계산한 희망 온도 중앙값 |
 | `voteCount` | number | 중앙값 계산에 쓴 희망 온도 개수 |
+| `tempStatus` | string | `applied`(적용됨) \| `pending`(운전자 적용 대기) \| `driver_set`(운전자가 직접 설정) |
 | `updatedAt` | Timestamp | 마지막으로 반영된 시각 |
 
-- 웹은 "현재 22.5℃ · 3명 희망 온도의 중앙값"처럼 보여줘요.
-- 운전자가 차량 공조를 직접 바꾸면 `driverTemp`, `passengerTemp`가 `medianTemp`와 달라질 수 있어요. 차량 앱은 실제 값을 그대로 기록해요.
+- 웹 M07의 "현재 실내 온도"는 두 구역이 같으면 그 값, 다르면 평균(0.5℃ 반올림)을 보여줘요.
+- M06의 "운전자 적용 대기 / 적용됨" 칩은 `tempStatus`로 정해요.
 
 ### 4.2 `route` (2단계, 초안)
 
@@ -137,69 +144,82 @@ https://motioncare-fec56.web.app/join?session=<sessionId>&seat=<Seat>
 | `destinationName` | string | 목적지 이름 |
 | `eta` | Timestamp | 도착 예정 시각 |
 | `remainingMin` | number | 도착까지 남은 시간(분) |
-| `restIntervalMin` | number | 휴식 간격(분), 예: 50 |
-| `nextRestStop` | map \| null | `{ name: string, etaMin: number }` 다음 휴게소와 남은 시간(분) |
+| `nextRestStop` | map \| null | `{ name: string, distanceKm: number, etaMin: number }`. M09 "횡성휴게소 · 약 12분 거리" |
 | `updatedAt` | Timestamp | |
 
 ---
 
 ## 5. `sessions/{sessionId}/passengers/{seat}`
 
-문서 ID가 좌석 값이에요(`rear_left` 등). 폰이 처음 접속할 때 만들고, 이후에 수정해요.
+문서 ID가 좌석 값이에요(`rear_left` 등). M02에서 좌석을 고를 때 만들어지고, M03~M05에서 채워지고, M06에서 제출돼요.
 
-| 필드 | 타입 | 값 | 설명 |
-|---|---|---|---|
-| `uid` | string | | 익명 로그인 uid (보안 규칙용) |
-| `name` | string | | 표시 이름, 비어 있으면 좌석명으로 표시 |
-| `desiredTemp` | number \| null | 18~26, 0.5 단위 | **희망 온도**. `null`이면 투표하지 않음 |
-| `sensitivity` | string | `low` \| `medium` \| `high` | 멀미 민감도 |
-| `sicknessLevel` | string | `ok` \| `mild` \| `severe` | 괜찮음 / 조금 불편 / 많이 불편 |
-| `visualMode` | string | `off` \| `dot` \| `horizon` | 시각 보조 모드 (3단계) |
-| `updatedAt` | Timestamp | | |
+| 필드 | 타입 | 값 | 화면 | 설명 |
+|---|---|---|---|---|
+| `uid` | string | | M02 | 익명 로그인 uid |
+| `name` | string | 최대 10자 | M00 | 표시 이름. 예: "수빈" |
+| `sensitivity` | string \| null | `none` \| `low` \| `medium` \| `high` | M03 | 없음 / 낮음 / 보통 / 높음 |
+| `sicknessTriggers` | string[] | `video`, `screen` | M03 | "영상 시청 시 멀미가 잘 나요", "차량 이동 중 화면 보기 불편해요" |
+| `desiredTemp` | number \| null | 18~26, 1℃ 단위 | M04 | 희망 온도. `null`이면 아직 안 정함 |
+| `visualMode` | string | `off` \| `dot` \| `horizon` \| `minimal` | M05 | 사용 안 함 / 움직이는 점 / 수평선 / 최소 시각 신호 |
+| `visualIntensity` | number | 0~100 | M05 | 시각 안내 강도(%), 기본 30 |
+| `restIntervalMin` | number \| null | 30 \| 60 \| 90 | M05 | 정기 휴식 알림 간격. `null`이면 꺼짐 |
+| `joinedAt` | Timestamp | | M02 | 좌석 등록 시각 |
+| `submittedAt` | Timestamp \| null | | M06 | 설정 제출 시각. 값이 있으면 다시 접속할 때 M07로 바로 가요 |
+| `updatedAt` | Timestamp | | | |
 
-- 처음 접속할 때 `desiredTemp`는 `null`이에요. 사용자가 +/-를 처음 누르면 현재 온도를 기준으로 값이 생겨요.
-- **"멀미나요" 동작 (2단계)**: 폰이 `sicknessLevel`을 `mild`나 `severe`로 바꿔요. 차량 앱은 `passengers`를 구독하다가 값이 `ok`에서 다른 값으로 바뀌면 알림, TTS, 외기 전환 제안을 띄워요.
+### 5.1 좌석 등록 (트랜잭션)
+
+두 사람이 같은 좌석을 동시에 고를 수 있으니까 **트랜잭션**으로 등록해요.
+
+```
+runTransaction:
+  seat 문서 읽기
+  ├─ 없음 → 새로 만들기 { uid, name, 기본값..., joinedAt }
+  ├─ 있음 + uid == 내 uid → 이름만 갱신
+  └─ 있음 + uid != 내 uid → 실패: "방금 다른 분이 선택했어요" → M02로
+```
+
+- 제출 전에 좌석을 바꾸면 이전 좌석 문서를 지워요.
+- 기본값: `sensitivity: null`, `sicknessTriggers: []`, `desiredTemp: null`, `visualMode: "dot"`, `visualIntensity: 30`, `restIntervalMin: 60`, `submittedAt: null`
+
+### 5.2 다시 접속했을 때
+
+QR을 다시 찍으면 `passengers`에서 `uid == 내 uid`인 문서를 찾아요.
+
+| 상황 | 이동 |
+|---|---|
+| 문서 없음 | M00 이름 입력부터 |
+| 문서 있음, `submittedAt == null` | M03 (설정 이어서 하기) |
+| 문서 있음, `submittedAt` 있음 | M07 홈 |
 
 ---
 
 ## 6. `sessions/{sessionId}/requests/{requestId}`
 
-**외기/내기 전환에만** 써요. 문서 ID는 자동 생성(`add()`)이에요.
+M08 **불편 알리기** 전용이에요. 문서 ID는 자동 생성(`add()`)이에요.
 
 | 필드 | 타입 | 쓰는 쪽 | 설명 |
 |---|---|---|---|
 | `seat` | Seat | 폰 | 요청한 좌석 |
-| `uid` | string | 폰 | 요청자 익명 uid |
-| `type` | string | 폰 | `SET_AIR_INTAKE` (나중에 다른 명령이 생기면 추가) |
-| `value` | string | 폰 | `outside` \| `recirc` |
-| `status` | string | 폰은 생성 시 `pending`, 이후 차량 | `pending` \| `done` \| `failed` |
-| `reason` | string | 차량 | `failed`일 때만. 아래 6.2 |
+| `uid` | string | 폰 | 요청자 uid |
+| `type` | string | 폰 | `REPORT_DISCOMFORT` (나중에 다른 요청이 생기면 추가) |
+| `value` | string | 폰 | 아래 6.1 |
+| `status` | string | 폰은 `pending`으로 생성, 이후 차량 | `pending`(전달됨) \| `done`(운전자 확인) \| `failed` |
 | `createdAt` | Timestamp | 폰 | |
-| `handledAt` | Timestamp | 차량 | done이나 failed로 바꾼 시각 |
+| `handledAt` | Timestamp | 차량 | 운전자가 확인한 시각 |
 
-### 6.1 요청 흐름
+### 6.1 불편 종류 `value`
 
-```
-[폰]  add({ seat, uid, type:"SET_AIR_INTAKE", value:"outside", status:"pending", createdAt })
-        │
-[차량] where status == "pending" 구독 → Vehicle SDK 설정
-        ├─ 성공: hvacState.airIntake 갱신 → status:"done", handledAt
-        └─ 실패: status:"failed", reason, handledAt
-        │
-[폰]  자기 요청 문서 구독 → 대기 표시 해제 / hvacState 구독 → 상태 갱신
-```
+| 값 | M08 표기 | 차량 앱 반응 |
+|---|---|---|
+| `nausea` | 메스꺼워요 | 알림 + TTS, 외기 전환 제안, (2단계) 휴게소 추천 |
+| `cold` | 너무 추워요 | 알림, 온도 +1℃ 제안 |
+| `hot` | 너무 더워요 | 알림, 온도 −1℃ 제안 |
+| `stuffy` | 답답해요 | 알림, 외기 전환 제안 |
+| `rest` | 잠깐 쉬고 싶어요 | 알림 + TTS, (2단계) 가까운 휴게소 추천 |
 
-- `pending`이 여러 개 쌓이면 **가장 최근 것만 실행**하고, 나머지는 `failed` / `superseded`로 처리해요.
-- 폰은 10초 안에 `pending`이 안 바뀌면 "차량 응답 없음"을 표시해요.
-
-### 6.2 `reason` 값
-
-| 값 | 의미 |
-|---|---|
-| `sdk_error` | Vehicle SDK 호출 실패 |
-| `superseded` | 더 최근 요청이 있어서 건너뜀 |
-| `unsupported` | 지원하지 않는 type이나 value |
-| `declined` | 운전자가 승인하지 않음 (2단계) |
+- 폰은 문서가 만들어지면 바로 M09 "잘 전해드렸어요"를 보여줘요.
+- 요청을 보내도 차량 설정은 바로 바뀌지 않아요. 운전자가 확인하고 적용해요.
 
 ---
 
@@ -209,16 +229,19 @@ Firebase 콘솔에서 직접 만들어요.
 
 ```
 sessions/test01
-  createdAt : (timestamp) 지금
-  active    : true
-  hvacState : { driverTemp: 22, passengerTemp: 22, airIntake: "recirc",
-                medianTemp: null, voteCount: 0, updatedAt: (timestamp) 지금 }
+  createdAt  : (timestamp) 지금
+  active     : true
+  tripTitle  : "우리 가족 · 서울 → 강릉"
+  driverName : "건호"
+  hvacState  : { driverTemp: 22, passengerTemp: 22, airIntake: "recirc",
+                 medianTemp: null, voteCount: 0, tempStatus: "applied",
+                 updatedAt: (timestamp) 지금 }
 ```
 
-- **B(웹) 단독 테스트**: 콘솔에서 `hvacState.passengerTemp`, `airIntake`를 바꾸면 웹 화면이 따라 바뀌어야 해요.
+- **B(웹) 단독 테스트**: 콘솔에서 `hvacState` 값을 바꾸면 M07이 따라 바뀌어야 해요. `passengers/front_right`를 직접 만들면 M02에서 조수석이 "사용 중"이 돼야 해요.
 - **A(차량) 단독 테스트**
-  - 온도: 콘솔에서 `passengers/rear_left`(`desiredTemp: 20`), `passengers/front_right`(`desiredTemp: 23`)를 만들면 차량 앱이 21.5℃로 맞춰야 해요.
-  - 외기: 콘솔에서 `requests`에 `seat: front_right, type: SET_AIR_INTAKE, value: outside, status: pending, uid: "console"`를 추가하면 외기로 바뀌어야 해요.
+  - 온도: `passengers/rear_left`(`desiredTemp: 22`), `passengers/front_right`(`desiredTemp: 24`) 생성 → 23℃로 바뀌어야 해요.
+  - 불편: `requests`에 `{ seat: "rear_left", uid: "console", type: "REPORT_DISCOMFORT", value: "nausea", status: "pending" }` 추가 → 차량 화면 알림이 떠야 해요.
 
 ---
 
@@ -226,5 +249,6 @@ sessions/test01
 
 | 버전 | 날짜 | 내용 |
 |---|---|---|
-| v0.1 | 2026-11-12 | 초안 작성 |
-| v0.2 | 2026-11-12 | 풍량 기능 제거. 온도는 희망 온도 중앙값 방식(`passengers.desiredTemp`), `requests`는 외기/내기 전환(`SET_AIR_INTAKE`) 전용 |
+| v0.1 | 2026-11-12 | 초안 |
+| v0.2 | 2026-11-12 | 좌석별 공조 제약 반영 |
+| v0.3 | 2026-11-13 | 디자인(M01~M09) 반영. 풍량·조명 제외, 희망 온도 중앙값을 실내 전체에 적용(`tempStatus`), 외기는 차량 앱만 제어, QR 1개 + 앱에서 좌석 선택, 이름 입력(M00), 민감도 4단계·시각 케어·휴식 간격, 불편 알리기(`REPORT_DISCOMFORT`) |
