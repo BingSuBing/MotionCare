@@ -39,11 +39,11 @@ class MainActivity : ComponentActivity() {
         v.initialize()
         vehicle = v
 
-        // 2) 세션 생성 (개발 중에는 test01 고정)
+        // 2) 세션 생성 (개발 세션 ID는 local.properties의 devSessionId)
         val hvac = HvacController(v)
         val s = SessionManager(hvac)
         session = s
-        s.start(useDevSession = true) { result ->
+        s.start(devSessionId = BuildConfig.DEV_SESSION_ID) { result ->
             runOnUiThread {
                 result
                     .onSuccess { sid ->
