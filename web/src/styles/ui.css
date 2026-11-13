@@ -656,6 +656,46 @@
   font-weight: var(--fw-medium);
 }
 
+/* ---------- 배치 도우미 ---------- */
+.stack {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.card-gap {
+  margin-top: var(--sp-2);
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+}
+
+/* ---------- 제출 요약 (M06) ---------- */
+.summary {
+  margin: var(--sp-2) 0 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-body);
+}
+
+.summary__row dt {
+  color: var(--c-muted);
+}
+
+.summary__row dd {
+  margin: 0;
+  font-weight: var(--fw-bold);
+  color: var(--c-ink);
+  text-align: right;
+}
+
 /* 포커스 표시 (키보드 접근성) */
 .btn:focus-visible,
 .option:focus-visible,

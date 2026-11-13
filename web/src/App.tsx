@@ -5,6 +5,10 @@ import JoinEntry from './pages/JoinEntry';
 import NamePage from './pages/NamePage';
 import WelcomePage from './pages/WelcomePage';
 import SeatPage from './pages/SeatPage';
+import SensitivityPage from './pages/SensitivityPage';
+import ClimatePage from './pages/ClimatePage';
+import CarePage from './pages/CarePage';
+import DonePage from './pages/DonePage';
 import ComingSoon from './pages/ComingSoon';
 import SessionLayout, { RequireName, RequireSeat, StartRedirect } from './session/SessionLayout';
 
@@ -23,11 +27,10 @@ export default function App() {
           <Route path="seat" element={<SeatPage />} />
         </Route>
         <Route element={<RequireSeat />}>
-          {/* feature/web-profile */}
-          <Route path="sensitivity" element={<ComingSoon title="이동할 때, 어떠세요?" />} />
-          <Route path="climate" element={<ComingSoon title="어떤 실내가 편안한가요?" />} />
-          <Route path="care" element={<ComingSoon title="나만의 케어를 골라요" />} />
-          <Route path="done" element={<ComingSoon title="설정이 제출되었습니다" />} />
+          <Route path="sensitivity" element={<SensitivityPage />} />
+          <Route path="climate" element={<ClimatePage />} />
+          <Route path="care" element={<CarePage />} />
+          <Route path="done" element={<DonePage />} />
           {/* feature/web-home */}
           <Route path="home" element={<ComingSoon title="편안한 이동" />} />
           <Route path="discomfort" element={<ComingSoon title="어떤 점이 불편한가요?" />} />
