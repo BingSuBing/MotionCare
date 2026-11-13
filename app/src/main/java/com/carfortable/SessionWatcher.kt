@@ -22,8 +22,7 @@ data class CabinState(
     val passengerTemp: Double? = null,
     val tempStatus: String? = null,
     val recirc: Boolean? = null,
-    val medianTemp: Double? = null,
-    val voteCount: Int = 0
+    val targetTemp: Double? = null   // 웹이 계산한 추천 온도
 )
 
 // passengers, 세션 문서(hvacState)를 구독해서 화면에 넘겨요
@@ -71,8 +70,7 @@ class SessionWatcher(private val sessionId: String) {
                     passengerTemp = (snap.get("hvacState.passengerTemp") as? Number)?.toDouble(),
                     tempStatus = snap.getString("hvacState.tempStatus"),
                     recirc = snap.getString("hvacState.airIntake")?.let { it == AIR_RECIRC },
-                    medianTemp = (snap.get("hvacState.medianTemp") as? Number)?.toDouble(),
-                    voteCount = (snap.get("hvacState.voteCount") as? Number)?.toInt() ?: 0
+                    targetTemp = (snap.get(TempApprovalSync.TARGET_TEMP_FIELD) as? Number)?.toDouble()
                 )
                 onCabin?.invoke(state)
             }

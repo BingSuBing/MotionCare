@@ -321,7 +321,7 @@ fun CarShell(
             AirChip(recirc = cabin.recirc, busy = airBusy, onClick = onToggleAir)
             Spacer(Modifier.width(16.dp))
             Text(
-                cabin.medianTemp?.let { "희망 온도 중앙값 ${formatTemp(it)}° (${cabin.voteCount}명)" } ?: "희망 온도 대기 중",
+                cabin.targetTemp?.let { "추천 온도 ${formatTemp(it)}°" } ?: "추천 온도 대기 중",
                 fontSize = 13.sp, color = CarColors.SubText
             )
         }
@@ -385,7 +385,7 @@ private fun formatTemp(t: Double): String =
 // ───────────────────────── 2. 홈 (지도 자리 + 알림 팝업) ─────────────────────────
 
 // 운전자 확인을 기다리는 온도 제안
-data class TempProposal(val median: Double, val voteCount: Int)
+data class TempProposal(val target: Double)
 
 @Composable
 fun HomeScreen(
@@ -449,8 +449,8 @@ private fun TempProposalBanner(
     AlertBanner(
         symbol = "🌡",
         background = CarColors.GreenLight,
-        title = "탑승자 희망 온도에 맞춰 ${formatTemp(proposal.median)}℃로 맞출까요?",
-        subtitle = "희망 온도를 보낸 ${proposal.voteCount}명의 중앙값 · 운전석·조수석에 함께 적용"
+        title = "탑승자 추천 온도 ${formatTemp(proposal.target)}℃로 맞출까요?",
+        subtitle = "멀미 민감도를 반영한 추천 온도 · 운전석·조수석에 함께 적용"
     ) {
         TextButton(onClick = onDecline, enabled = !approving) {
             Text("나중에", color = CarColors.SubText)
@@ -547,8 +547,8 @@ fun ClimateScreen(
                     TempCard("운전석", cabin.driverTemp, "현재 설정", Modifier.weight(1f))
                     TempCard("조수석", cabin.passengerTemp, "현재 설정", Modifier.weight(1f))
                     TempCard(
-                        "희망 온도 중앙값", cabin.medianTemp,
-                        "${cabin.voteCount}명 기준 · 뒷좌석 포함", Modifier.weight(1f)
+                        "추천 온도", cabin.targetTemp,
+                        "멀미 민감도 반영 · ${passengers.count { it.desiredTemp != null }}명 기준", Modifier.weight(1f)
                     )
                 }
                 Row(
@@ -589,8 +589,8 @@ fun ClimateScreen(
 }
 
 private fun climateHeadline(cabin: CabinState, proposal: TempProposal?): String = when {
-    proposal != null -> "희망 온도 ${formatTemp(proposal.median)}℃ 적용을 기다리고 있어요"
-    cabin.medianTemp == null -> "탑승자들의 희망 온도를 기다리고 있어요"
+    proposal != null -> "추천 온도 ${formatTemp(proposal.target)}℃ 적용을 기다리고 있어요"
+    cabin.targetTemp == null -> "탑승자들의 희망 온도를 기다리고 있어요"
     cabin.tempStatus == "driver_set" -> "운전자가 정한 온도를 유지하고 있어요"
     else -> "모두가 편안하도록 실내환경을 맞췄어요"
 }
@@ -695,7 +695,7 @@ private fun HomePreview() {
     CarShell(
         tab = CarTab.HOME,
         onTab = {},
-        cabin = CabinState(driverTemp = 22.0, recirc = true, medianTemp = 22.5, voteCount = 2),
+        cabin = CabinState(driverTemp = 22.0, recirc = true, targetTemp = 23.0),
         airBusy = false,
         onToggleAir = {}
     ) {
@@ -703,7 +703,7 @@ private fun HomePreview() {
             requests = listOf(PendingRequest("r1", "rear_left", "nausea", null)),
             passengers = listOf(PassengerItem("rear_left", "현아", true)),
             onConfirm = {},
-            proposal = TempProposal(23.0, 2),
+            proposal = TempProposal(23.0),
             approving = false,
             onApprove = {},
             onDecline = {}

@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
     private var vehicle: Vehicle? = null
     private var hvac: HvacController? = null
     private var session: SessionManager? = null
-    private var tempSync: TempMedianSync? = null
+    private var tempSync: TempApprovalSync? = null
     private var requestSync: CareRequestSync? = null
     private var watcher: SessionWatcher? = null
 
@@ -139,12 +139,12 @@ class MainActivity : ComponentActivity() {
         watcher = w
     }
 
-    // 4) 희망 온도 중앙값 계산 시작 (적용은 운전자 확인 후)
+    // 4) 웹이 올린 추천 온도를 운전자 확인 후 적용
     private fun startTempSync(sid: String, hvac: HvacController) {
-        val sync = TempMedianSync(sid, hvac)
+        val sync = TempApprovalSync(sid, hvac)
         sync.onStatus = { text -> Log.d(TAG, "온도 동기화: $text") }
-        sync.onProposal = { median, count ->
-            runOnUiThread { proposal = median?.let { TempProposal(it, count) } }
+        sync.onProposal = { target ->
+            runOnUiThread { proposal = target?.let { TempProposal(it) } }
         }
         sync.start()
         tempSync = sync
@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity() {
         requestSync = sync
     }
 
-    // 희망 온도 제안 [적용]: 차량에 적용, 실패하면 제안은 그대로 남아요
+    // 추천 온도 [적용]: 차량에 적용, 실패하면 제안은 그대로 남아요
     private fun approveTemp() {
         val sync = tempSync ?: return
         if (approving) return
