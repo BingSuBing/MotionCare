@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
         val hvac = HvacController(v)
         val s = SessionManager(hvac)
         session = s
-        s.start(devSessionId = BuildConfig.DEV_SESSION_ID) { result ->
+        s.start(devSessionId = BuildConfig.DEV_SESSION_ID.ifBlank { null }) { result ->
             runOnUiThread {
                 result
                     .onSuccess { sid ->
