@@ -8,7 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
-// 세션 생성/종료 (docs/firestore-schema.md v0.3, 4장)
+// 세션 생성/종료 (docs/firestore-schema.md v0.3.1, 4장)
 class SessionManager(private val hvac: HvacController) {
 
     private val auth = FirebaseAuth.getInstance()
@@ -17,13 +17,19 @@ class SessionManager(private val hvac: HvacController) {
     var sessionId: String? = null
         private set
 
-    // 익명 로그인 → 공조 초기 상태 확인 → sessions/{id} 생성
+    // 익명 로그인 → 공조 초기 상태 확인 → sessions/{id} 생성 (carUid = 내 uid)
     fun start(useDevSession: Boolean, onResult: (Result<String>) -> Unit) {
         auth.signInAnonymously()
-            .addOnSuccessListener {
+            .addOnSuccessListener { result ->
+                val carUid = result.user?.uid
+                if (carUid == null) {
+                    onResult(Result.failure(IllegalStateException("익명 로그인 uid 없음")))
+                    return@addOnSuccessListener
+                }
                 val sid = if (useDevSession) Paths.DEV_SESSION_ID else newSessionId()
                 prepareHvac { driverTemp, passengerTemp, airIntake ->
                     val data = hashMapOf<String, Any?>(
+                        "carUid" to carUid,
                         "createdAt" to FieldValue.serverTimestamp(),
                         "active" to true,
                         "tripTitle" to TRIP_TITLE,
