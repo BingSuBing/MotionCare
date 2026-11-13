@@ -22,6 +22,8 @@
 - 외기/내기: 폰에 버튼이 없어요. 불편 요청(답답해요/메스꺼워요)이 오면 차량 앱이 운전자에게 제안해요.
 - **풍량·바람·조명 기능은 없어요.** 피그마에 남아 있어도 구현하지 않아요.
 - QR은 차 1대에 1개: `/join?session=<id>`. 좌석은 웹에서 고르고, 사람은 **익명 로그인 uid**로 구별해요.
+- 공용 Kotlin 모델: `shared/src/main/java/com/carfortable/shared/FirestoreModels.kt` (패키지 `com.carfortable.shared`). 웹 `types.ts`와 1:1로 맞춰요.
+- 배포 주소: `https://motioncare-fec56.web.app` (QR: `https://motioncare-fec56.web.app/join?session=<id>`)
 
 ## 웹 기술 스택과 폴더
 
@@ -65,11 +67,12 @@ web/src/
 - `main` 브랜치에 직접 커밋·푸시 금지. PR은 항상 `dev`로.
 - `firebase deploy`는 사용자가 요청할 때만.
 - Firestore 보안 규칙(`firestore.rules`)과 Firebase 콘솔 설정은 건드리지 않아요 (4단계 작업).
-- `app/`, `mobile/`, `shared/`(A의 Kotlin 코드)는 수정하지 않아요.
+- `app/`, `mobile/`(A의 Kotlin 코드)는 수정하지 않아요. `shared/`의 `FirestoreModels.kt`는 사용자가 승인한 스키마 변경(`[schema]` PR)에서만 `types.ts`와 함께 고쳐요.
 - `local.properties`, 키 파일은 열거나 커밋하지 않아요.
 
 ## 테스트 환경
 
 - 개발용 고정 세션: `test01` → `http://localhost:5173/join?session=test01`
+- 차량 앱도 `test01`을 써요. 테스트 전 콘솔에서 `sessions/test01/passengers`, `requests`의 예전 문서를 지우고, 동시에 테스트할 땐 서로 알려요.
 - 차량 앱 없이 테스트: Firebase 콘솔에서 `sessions/test01/hvacState` 값을 직접 바꿔 보면 웹이 따라 바뀌어야 해요.
 - 폰 여러 대 흉내: 시크릿 창을 여러 개 열면 각각 다른 익명 uid가 생겨요.

@@ -1,6 +1,6 @@
 # Firestore 스키마 (MotionCare / 편안타)
 
-> 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
+> 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/src/main/java/com/carfortable/shared/FirestoreModels.kt`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
 - 버전: **v0.3.1** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영, 차량 식별용 `carUid` 추가
@@ -58,8 +58,8 @@ QR 스캔 → M00 이름 입력 → M01 참여하기 → M02 좌석 선택 → M
 차 한 대에 **QR 하나**예요. 좌석은 폰에서 고르니까 URL에 좌석이 없어요.
 
 ```
-https://<프로젝트ID>.web.app/join?session=<sessionId>
-예) https://motioncare-xxxx.web.app/join?session=test01
+https://motioncare-fec56.web.app/join?session=<sessionId>
+예) https://motioncare-fec56.web.app/join?session=test01
 ```
 
 ### 2.3 좌석 `Seat`
@@ -242,6 +242,7 @@ sessions/test01
                  updatedAt: (timestamp) 지금 }
 ```
 
+- **테스트 전 정리**: 차량 앱이 `test01`을 다시 만들어도(`set`) 하위 `passengers`, `requests` 문서는 남아요. 예전 희망 온도가 중앙값에 섞이지 않게 콘솔에서 지우고 시작해요. 둘이 동시에 테스트할 땐 서로 알려요.
 - **B(웹) 단독 테스트**: 콘솔에서 `hvacState` 값을 바꾸면 M07이 따라 바뀌어야 해요. `passengers/front_right`를 직접 만들면 M02에서 조수석이 "사용 중"이 돼야 해요.
 - **A(차량) 단독 테스트**
   - 온도: `passengers/rear_left`(`desiredTemp: 22`), `passengers/front_right`(`desiredTemp: 24`) 생성 → 23℃로 바뀌어야 해요.
