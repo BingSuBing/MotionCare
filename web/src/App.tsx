@@ -9,7 +9,9 @@ import SensitivityPage from './pages/SensitivityPage';
 import ClimatePage from './pages/ClimatePage';
 import CarePage from './pages/CarePage';
 import DonePage from './pages/DonePage';
-import ComingSoon from './pages/ComingSoon';
+import HomePage from './pages/HomePage';
+import DiscomfortPage from './pages/DiscomfortPage';
+import SentPage from './pages/SentPage';
 import SessionLayout, { RequireName, RequireSeat, StartRedirect } from './session/SessionLayout';
 
 export default function App() {
@@ -31,10 +33,9 @@ export default function App() {
           <Route path="climate" element={<ClimatePage />} />
           <Route path="care" element={<CarePage />} />
           <Route path="done" element={<DonePage />} />
-          {/* feature/web-home */}
-          <Route path="home" element={<ComingSoon title="편안한 이동" />} />
-          <Route path="discomfort" element={<ComingSoon title="어떤 점이 불편한가요?" />} />
-          <Route path="sent/:requestId" element={<ComingSoon title="잘 전해드렸어요" />} />
+          <Route path="home" element={<HomePage />} />
+          <Route path="discomfort" element={<DiscomfortPage />} />
+          <Route path="sent/:requestId" element={<SentPage />} />
         </Route>
       </Route>
 
