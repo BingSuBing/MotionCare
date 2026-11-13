@@ -31,6 +31,8 @@ class MainActivity : ComponentActivity() {
     // 화면에 보여줄 상태
     private var doorStatus by mutableStateOf("도어 상태 조회 중...")
     private var firebaseStatus by mutableStateOf("Firebase 연결 중...")
+    private var hvacStatus by mutableStateOf("공조 조회 중...")
+    private var recircStatus by mutableStateOf("외기/내기 시험 중...")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +56,18 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread { doorStatus = "오류: ${e.message}" }
             }
         )
+
+        // 4) 공조 모듈 시험: 앞좌석 두 구역 22.5도 → 외기 유입
+        val hvac = HvacController(v)
+        hvac.setCabinTemperature(22.5f) { result ->
+            hvac.readFrontTemperatures { driver, passenger ->
+                runOnUiThread { hvacStatus = "온도 설정: $result / 운전석 $driver, 조수석 $passenger" }
+            }
+        }
+        hvac.setAirIntake(recirc = false) { result ->
+            runOnUiThread { recircStatus = "외기 유입 설정: $result" }
+        }
+
         // 3) Firebase 연결 테스트: 익명 로그인 → Firestore 쓰기
         FirebaseAuth.getInstance().signInAnonymously()
             .addOnSuccessListener { result ->
@@ -87,6 +101,8 @@ class MainActivity : ComponentActivity() {
                     Column(modifier = Modifier.padding(innerPadding)) {
                         StatusText(text = doorStatus)
                         StatusText(text = firebaseStatus)
+                        StatusText(text = hvacStatus)
+                        StatusText(text = recircStatus)
                     }
                 }
             }
