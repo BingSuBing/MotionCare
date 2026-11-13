@@ -23,10 +23,12 @@ class MainActivity : ComponentActivity() {
 
     private var vehicle: Vehicle? = null
     private var session: SessionManager? = null
+    private var tempSync: TempMedianSync? = null
 
     // 화면에 보여줄 상태
     private var sessionStatus by mutableStateOf("세션 준비 중...")
     private var joinUrl by mutableStateOf("")
+    private var tempStatus by mutableStateOf("희망 온도 대기 중...")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +49,7 @@ class MainActivity : ComponentActivity() {
                     .onSuccess { sid ->
                         sessionStatus = "세션: $sid ✅"
                         joinUrl = SessionManager.joinUrl(sid)
+                        startTempSync(sid, hvac)
                     }
                     .onFailure { e ->
                         Log.e(TAG, "세션 생성 실패", e)
@@ -63,14 +66,25 @@ class MainActivity : ComponentActivity() {
                         if (joinUrl.isNotEmpty()) {
                             StatusText(text = joinUrl)
                         }
+                        StatusText(text = tempStatus)
                     }
                 }
             }
         }
     }
 
+    // 3) 희망 온도 중앙값 적용 시작
+    private fun startTempSync(sid: String, hvac: HvacController) {
+        val sync = TempMedianSync(sid, hvac)
+        sync.onStatus = { text -> runOnUiThread { tempStatus = text } }
+        sync.start()
+        tempSync = sync
+    }
+
     override fun onDestroy() {
-        // SDK 해제 (세션 종료는 나중에 종료 버튼으로)
+        // 구독·SDK 해제 (세션 종료는 나중에 종료 버튼으로)
+        tempSync?.stop()
+        tempSync = null
         vehicle?.release()
         vehicle = null
         super.onDestroy()

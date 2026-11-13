@@ -1,5 +1,6 @@
 package com.carfortable
 
+import android.util.Log
 import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.constant.area.SeatValue
@@ -57,6 +58,7 @@ class HvacController(vehicle: Vehicle) {
             area = driverZone,
             unit = TemperatureUnit.CELSIUS,
             onComplete = { driver: Float? ->
+                Log.d(TAG, "운전석 온도 읽기: $driver")
                 hvac.getHvacTemperature(
                     area = passengerZone,
                     unit = TemperatureUnit.CELSIUS,
@@ -73,8 +75,14 @@ class HvacController(vehicle: Vehicle) {
             area = zone,
             value = temp,
             unit = TemperatureUnit.CELSIUS,
-            onComplete = { _, _ -> callback(HvacResult.Success) },
-            onFailed = { e: Exception -> callback(toFailure(e)) }
+            onComplete = { area, value ->
+                Log.d(TAG, "온도 설정 응답: zone=$area 요청=$temp 응답=$value")
+                callback(HvacResult.Success)
+            },
+            onFailed = { e: Exception ->
+                Log.e(TAG, "온도 설정 실패: zone=$zone 요청=$temp", e)
+                callback(toFailure(e))
+            }
         )
     }
 
@@ -110,6 +118,7 @@ class HvacController(vehicle: Vehicle) {
     }
 
     companion object {
+        private const val TAG = "MotionCare"
         const val MIN_TEMP = 16f
         const val MAX_TEMP = 30f
         const val REASON_OUT_OF_RANGE = "out_of_range"
