@@ -21,6 +21,7 @@ import com.carfortable.ui.theme.MotionCareTheme
 class MainActivity : ComponentActivity() {
 
     private var vehicle: Vehicle? = null
+    private var navi: NaviController? = null
     private var hvac: HvacController? = null
     private var session: SessionManager? = null
     private var tempSync: TempApprovalSync? = null
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
     private var pendingRequests by mutableStateOf<List<PendingRequest>>(emptyList())
     private var proposal by mutableStateOf<TempProposal?>(null)
     private var approving by mutableStateOf(false)
+    private var naviState by mutableStateOf(NaviState())
+    private var rest by mutableStateOf(RestUiState())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +52,12 @@ class MainActivity : ComponentActivity() {
         val v = Vehicle(this)
         v.initialize()
         vehicle = v
+
+        // 1-1) 내비 연결 (현재 위치, 경로, 경유지)
+        val n = NaviController(this)
+        n.onState = { state -> naviState = state }
+        n.connect()
+        navi = n
 
         // 2) 세션 생성
         val h = HvacController(v)
@@ -86,6 +95,11 @@ class MainActivity : ComponentActivity() {
                                         airBusy = airBusy,
                                         onConfirm = { req -> requestSync?.acknowledge(req.id) },
                                         onFreshAirAndConfirm = { req -> freshAirAndConfirm(req) },
+                                        onFindRest = { req ->
+                                            requestSync?.acknowledge(req.id)
+                                            tab = CarTab.JOURNEY
+                                            findRestStops()
+                                        },
                                         proposal = proposal,
                                         showProposal = tab != CarTab.CLIMATE,
                                         approving = approving,
@@ -95,7 +109,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) {
                                 when (tab) {
-                                    CarTab.HOME -> HomeScreen()
+                                    CarTab.HOME -> HomeScreen(naviState, rest)
+                                    CarTab.JOURNEY -> JourneyScreen(
+                                        navi = naviState,
+                                        rest = rest,
+                                        onSearch = { findRestStops() },
+                                        onAdd = { stop -> addRestStop(stop) },
+                                        onOpenNaviSearch = { navi?.openNaviSearch("휴게소") }
+                                    )
                                     CarTab.PASSENGERS -> PassengersScreen(
                                         driverName = SessionManager.DRIVER_NAME,
                                         cabin = cabin,
@@ -169,6 +190,7 @@ class MainActivity : ComponentActivity() {
                 cabin = CabinState()
                 pendingRequests = emptyList()
                 proposal = null
+                rest = RestUiState()
                 startSession()
             }
         }
@@ -271,9 +293,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 휴식처 찾기: 내비의 현재 위치 기준으로 카카오 검색 (실패하면 최근 결과)
+    private fun findRestStops() {
+        val lat = naviState.lat
+        val lng = naviState.lng
+        if (lat == null || lng == null) {
+            navi?.refresh()
+            Toast.makeText(this, "현재 위치를 아직 못 받았어요. 잠시 후 다시 눌러 주세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (rest.searching) return
+        rest = rest.copy(searching = true)
+        RestStopFinder.search(this, lat, lng) { result ->
+            rest = RestUiState(searching = false, result = result, addedId = null)
+        }
+    }
+
+    // [경유지로 추가]: 내비에 경유지 요청 → 웹 표시용으로 route.nextRestStop 기록
+    private fun addRestStop(stop: RestStop) {
+        val sent = navi?.addRestStop(stop) ?: false
+        if (!sent) return
+        rest = rest.copy(addedId = stop.id)
+        val km = stop.distanceM / 1000.0
+        // 도착 예상: 경로가 정해지기 전이라 평균 80km/h로 어림 (내비 정보가 오면 그쪽이 정확해요)
+        val etaMin = maxOf(1, (km / 80.0 * 60).toInt())
+        watcher?.writeNextRestStop(stop.name, Math.round(km * 10) / 10.0, etaMin)
+    }
+
     override fun onDestroy() {
         // 구독·SDK 해제 (세션 종료는 [여정 종료] 버튼으로)
         stopSyncs()
+        navi?.release()
+        navi = null
         vehicle?.release()
         vehicle = null
         super.onDestroy()

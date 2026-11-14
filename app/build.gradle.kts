@@ -14,6 +14,8 @@ val localProps = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 val devSessionId: String = localProps.getProperty("devSessionId")?.trim().orEmpty()
+// 카카오 로컬 REST API 키: local.properties의 kakaoRestKey (커밋 안 됨)
+val kakaoRestKey: String = localProps.getProperty("kakaoRestKey")?.trim().orEmpty()
 
 android {
     namespace = "com.carfortable"
@@ -27,6 +29,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "KAKAO_REST_KEY", "\"$kakaoRestKey\"")
     }
 
     buildTypes {
@@ -76,6 +79,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(project(":shared"))
     implementation("ai.pleos.playground:Vehicle:2.3.2")
+    implementation("ai.pleos.playground:NaviHelper:3.0.5")
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("com.google.zxing:core:3.5.3")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)

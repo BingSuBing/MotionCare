@@ -417,21 +417,6 @@ private fun formatTemp(t: Double): String =
 // 운전자 확인을 기다리는 온도 제안
 data class TempProposal(val target: Double)
 
-@Composable
-fun HomeScreen() {
-    // 지도 자리 (내비게이션은 2단계)
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(CarColors.MapGray),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
-    }
-}
-
 // 모든 탭 위에 뜨는 알림: 불편 요청 + 추천 온도
 @Composable
 fun AlertsOverlay(
@@ -441,6 +426,7 @@ fun AlertsOverlay(
     airBusy: Boolean,
     onConfirm: (PendingRequest) -> Unit,
     onFreshAirAndConfirm: (PendingRequest) -> Unit,
+    onFindRest: (PendingRequest) -> Unit,
     proposal: TempProposal?,
     showProposal: Boolean,
     approving: Boolean,
@@ -459,17 +445,25 @@ fun AlertsOverlay(
             val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
             // 메스꺼워요 + 지금 내기 순환이면 외기 전환을 같이 제안
             val suggestFreshAir = req.value == Discomfort.NAUSEA && recirc != false
+            // 잠깐 쉬고 싶어요 → 휴식처 찾기 제안
+            val suggestRest = req.value == Discomfort.REST
             AlertBanner(
                 symbol = "♡",
                 background = CarColors.Alert,
                 title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
-                subtitle = if (suggestFreshAir) {
-                    "${Seat.label(req.seat)} · 바깥 공기를 넣으면 메스꺼움에 도움이 돼요$more"
-                } else {
-                    "${Seat.label(req.seat)}$more"
+                subtitle = when {
+                    suggestFreshAir -> "${Seat.label(req.seat)} · 바깥 공기를 넣으면 메스꺼움에 도움이 돼요$more"
+                    suggestRest -> "${Seat.label(req.seat)} · 가까운 휴게소를 찾아볼까요?$more"
+                    else -> "${Seat.label(req.seat)}$more"
                 }
             ) {
-                if (suggestFreshAir) {
+                if (suggestRest) {
+                    TextButton(onClick = { onConfirm(req) }) {
+                        Text("확인만", color = CarColors.SubText)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    GreenButton(text = "휴식처 찾기", onClick = { onFindRest(req) })
+                } else if (suggestFreshAir) {
                     TextButton(onClick = { onConfirm(req) }, enabled = !airBusy) {
                         Text("확인만", color = CarColors.SubText)
                     }
@@ -948,13 +942,13 @@ private fun LobbyPreview() {
 @Composable
 private fun HomePreview() {
     CarShell(
-        tab = CarTab.HOME,
+        tab = CarTab.PASSENGERS,
         onTab = {},
         cabin = CabinState(driverTemp = 22.0, recirc = true, targetTemp = 23.0),
         airBusy = false,
         onToggleAir = {},
         onEndTrip = {}
     ) {
-        HomeScreen()
+        ComingSoonScreen(CarTab.PASSENGERS)
     }
 }
