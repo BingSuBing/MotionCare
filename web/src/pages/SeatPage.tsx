@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Armchair, CircleCheck, CircleX, User } from 'lucide-react';
 import { Button, Chip, PageHeading, ProgressBar, Screen, TopBar } from '../components/ui';
@@ -57,6 +57,11 @@ export default function SeatPage() {
   const [picked, setPicked] = useState<Seat | null>(me?.seat ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 등록한 좌석이 실시간 목록에 들어온 걸 확인한 뒤 다음 화면으로 (트랜잭션 결과가 구독에 조금 늦게 와요)
+  const [claimed, setClaimed] = useState<Seat | null>(null);
+  useEffect(() => {
+    if (claimed && me?.seat === claimed) navigate('../sensitivity');
+  }, [claimed, me?.seat, navigate]);
 
   const ownerOf = (seat: Seat) => passengers.find((p) => p.seat === seat);
 
@@ -87,7 +92,7 @@ export default function SeatPage() {
     setError(null);
     try {
       await claimSeat({ sid, seat: picked, uid, name, prevSeat: me?.seat ?? null });
-      navigate('../sensitivity');
+      setClaimed(picked);
     } catch (e) {
       setError(
         e instanceof SeatTakenError
