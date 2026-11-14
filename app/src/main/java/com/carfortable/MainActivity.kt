@@ -51,12 +51,78 @@ class MainActivity : ComponentActivity() {
         vehicle = v
 
         // 2) 세션 생성
-        //    debug: local.properties의 devSessionId, 없으면 공용 test01
-        //    release: 무작위 6자리 ID
         val h = HvacController(v)
         hvac = h
-        val s = SessionManager(h)
-        session = s
+        session = SessionManager(h)
+        startSession()
+
+        setContent {
+            MotionCareTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Box(modifier = Modifier.padding(innerPadding)) {
+                        if (!started) {
+                            LobbyScreen(
+                                sessionId = sessionId,
+                                joinUrl = joinUrl,
+                                errorText = sessionError,
+                                driverName = SessionManager.DRIVER_NAME,
+                                passengers = passengers,
+                                onRemove = { p -> watcher?.removePassenger(p.seat) },
+                                onStart = { started = true }
+                            )
+                        } else {
+                            CarShell(
+                                tab = tab,
+                                onTab = { tab = it },
+                                cabin = cabin,
+                                airBusy = airBusy,
+                                onToggleAir = { toggleAirIntake() },
+                                onEndTrip = { endTrip() }
+                            ) {
+                                when (tab) {
+                                    CarTab.HOME -> HomeScreen(
+                                        requests = pendingRequests,
+                                        passengers = passengers,
+                                        onConfirm = { req -> requestSync?.acknowledge(req.id) },
+                                        proposal = proposal,
+                                        approving = approving,
+                                        onApprove = { approveTemp() },
+                                        onDecline = { tempSync?.decline() }
+                                    )
+                                    CarTab.PASSENGERS -> PassengersScreen(
+                                        driverName = SessionManager.DRIVER_NAME,
+                                        cabin = cabin,
+                                        passengers = passengers,
+                                        onRename = { p, name -> watcher?.renamePassenger(p.seat, name) },
+                                        onRemove = { p -> watcher?.removePassenger(p.seat) },
+                                        onGoClimate = { tab = CarTab.CLIMATE }
+                                    )
+                                    CarTab.CLIMATE -> ClimateScreen(
+                                        passengers = passengers,
+                                        cabin = cabin,
+                                        proposal = proposal,
+                                        approving = approving,
+                                        airBusy = airBusy,
+                                        onApprove = { approveTemp() },
+                                        onDecline = { tempSync?.decline() },
+                                        onToggleAir = { toggleAirIntake() }
+                                    )
+                                    else -> ComingSoonScreen(tab)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 세션 시작
+    //   debug: local.properties의 devSessionId, 없으면 공용 test01
+    //   release: 무작위 6자리 ID
+    private fun startSession() {
+        val s = session ?: return
+        val h = hvac ?: return
         val devSessionId = if (BuildConfig.DEBUG) {
             BuildConfig.DEV_SESSION_ID.ifBlank { Paths.DEV_SESSION_ID }
         } else {
@@ -79,57 +145,37 @@ class MainActivity : ComponentActivity() {
                     }
             }
         }
+    }
 
-        setContent {
-            MotionCareTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(modifier = Modifier.padding(innerPadding)) {
-                        if (!started) {
-                            LobbyScreen(
-                                sessionId = sessionId,
-                                joinUrl = joinUrl,
-                                errorText = sessionError,
-                                driverName = SessionManager.DRIVER_NAME,
-                                passengers = passengers,
-                                onRemove = { p -> watcher?.removePassenger(p.seat) },
-                                onStart = { started = true }
-                            )
-                        } else {
-                            CarShell(
-                                tab = tab,
-                                onTab = { tab = it },
-                                cabin = cabin,
-                                airBusy = airBusy,
-                                onToggleAir = { toggleAirIntake() }
-                            ) {
-                                when (tab) {
-                                    CarTab.HOME -> HomeScreen(
-                                        requests = pendingRequests,
-                                        passengers = passengers,
-                                        onConfirm = { req -> requestSync?.acknowledge(req.id) },
-                                        proposal = proposal,
-                                        approving = approving,
-                                        onApprove = { approveTemp() },
-                                        onDecline = { tempSync?.decline() }
-                                    )
-                                    CarTab.CLIMATE -> ClimateScreen(
-                                        passengers = passengers,
-                                        cabin = cabin,
-                                        proposal = proposal,
-                                        approving = approving,
-                                        airBusy = airBusy,
-                                        onApprove = { approveTemp() },
-                                        onDecline = { tempSync?.decline() },
-                                        onToggleAir = { toggleAirIntake() }
-                                    )
-                                    else -> ComingSoonScreen(tab)
-                                }
-                            }
-                        }
-                    }
-                }
+    // 여정 종료: active = false → 구독 정리 → 새 세션으로 처음 화면
+    private fun endTrip() {
+        val s = session ?: return
+        s.end {
+            runOnUiThread {
+                stopSyncs()
+                started = false
+                tab = CarTab.HOME
+                sessionId = null
+                joinUrl = ""
+                sessionError = null
+                passengers = emptyList()
+                cabin = CabinState()
+                pendingRequests = emptyList()
+                proposal = null
+                startSession()
             }
         }
+    }
+
+    private fun stopSyncs() {
+        watcher?.stop()
+        watcher = null
+        tempSync?.stop()
+        tempSync = null
+        recommender?.stop()
+        recommender = null
+        requestSync?.stop()
+        requestSync = null
     }
 
     // 3) 탑승자 목록·실내 상태 구독 (화면 표시용)
@@ -204,15 +250,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        // 구독·SDK 해제 (세션 종료는 나중에 종료 버튼으로)
-        watcher?.stop()
-        watcher = null
-        tempSync?.stop()
-        tempSync = null
-        recommender?.stop()
-        recommender = null
-        requestSync?.stop()
-        requestSync = null
+        // 구독·SDK 해제 (세션 종료는 [여정 종료] 버튼으로)
+        stopSyncs()
         vehicle?.release()
         vehicle = null
         super.onDestroy()
