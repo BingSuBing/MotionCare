@@ -76,6 +76,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(project(":shared"))
     implementation("ai.pleos.playground:Vehicle:2.3.2")
+    implementation("com.google.zxing:core:3.5.3")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
