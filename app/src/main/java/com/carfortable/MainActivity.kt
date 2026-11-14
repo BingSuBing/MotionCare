@@ -77,18 +77,25 @@ class MainActivity : ComponentActivity() {
                                 cabin = cabin,
                                 airBusy = airBusy,
                                 onToggleAir = { toggleAirIntake() },
-                                onEndTrip = { endTrip() }
-                            ) {
-                                when (tab) {
-                                    CarTab.HOME -> HomeScreen(
+                                onEndTrip = { endTrip() },
+                                overlay = {
+                                    AlertsOverlay(
                                         requests = pendingRequests,
                                         passengers = passengers,
+                                        recirc = cabin.recirc,
+                                        airBusy = airBusy,
                                         onConfirm = { req -> requestSync?.acknowledge(req.id) },
+                                        onFreshAirAndConfirm = { req -> freshAirAndConfirm(req) },
                                         proposal = proposal,
+                                        showProposal = tab != CarTab.CLIMATE,
                                         approving = approving,
                                         onApprove = { approveTemp() },
                                         onDecline = { tempSync?.decline() }
                                     )
+                                }
+                            ) {
+                                when (tab) {
+                                    CarTab.HOME -> HomeScreen()
                                     CarTab.PASSENGERS -> PassengersScreen(
                                         driverName = SessionManager.DRIVER_NAME,
                                         cabin = cabin,
@@ -228,21 +235,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 하단바 외기/내기 버튼: 차량에 먼저 적용하고, 성공하면 Firestore에 기록
+    // 하단바·실내 조율의 외기/내기 버튼: 지금과 반대로 전환
     private fun toggleAirIntake() {
+        setAirIntake(!(cabin.recirc ?: true)) {}
+    }
+
+    // 메스꺼워요 팝업 [외기로 바꾸고 확인]: 외기 적용 성공하면 요청도 확인 처리
+    private fun freshAirAndConfirm(req: PendingRequest) {
+        setAirIntake(false) { ok ->
+            if (ok) requestSync?.acknowledge(req.id)
+        }
+    }
+
+    // 차량에 외기/내기를 먼저 적용하고, 성공하면 Firestore에 기록
+    private fun setAirIntake(recirc: Boolean, onDone: (Boolean) -> Unit) {
         val h = hvac ?: return
         val w = watcher ?: return
         if (airBusy) return
-        val nextRecirc = !(cabin.recirc ?: true)
         airBusy = true
-        h.setAirIntake(nextRecirc) { result ->
+        h.setAirIntake(recirc) { result ->
             runOnUiThread {
                 airBusy = false
                 when (result) {
-                    is HvacResult.Success -> w.writeAirIntake(nextRecirc)
+                    is HvacResult.Success -> {
+                        w.writeAirIntake(recirc)
+                        onDone(true)
+                    }
                     is HvacResult.Failure -> {
                         Log.e(TAG, "외기/내기 전환 실패: ${result.reason} ${result.message}")
                         Toast.makeText(this, "외기/내기 전환에 실패했어요", Toast.LENGTH_SHORT).show()
+                        onDone(false)
                     }
                 }
             }

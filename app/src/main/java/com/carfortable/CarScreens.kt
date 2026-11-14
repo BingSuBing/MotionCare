@@ -276,6 +276,7 @@ fun CarShell(
     airBusy: Boolean,
     onToggleAir: () -> Unit,
     onEndTrip: () -> Unit,
+    overlay: @Composable () -> Unit = {},
     content: @Composable () -> Unit
 ) {
     var confirmEnd by remember { mutableStateOf(false) }
@@ -309,6 +310,10 @@ fun CarShell(
             }
             Box(modifier = Modifier.weight(1f).fillMaxHeight().padding(end = 20.dp, bottom = 8.dp)) {
                 content()
+                // 알림은 어느 탭에 있든 위쪽에 떠요
+                Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                    overlay()
+                }
             }
         }
 
@@ -413,50 +418,75 @@ private fun formatTemp(t: Double): String =
 data class TempProposal(val target: Double)
 
 @Composable
-fun HomeScreen(
+fun HomeScreen() {
+    // 지도 자리 (내비게이션은 2단계)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(CarColors.MapGray),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
+    }
+}
+
+// 모든 탭 위에 뜨는 알림: 불편 요청 + 추천 온도
+@Composable
+fun AlertsOverlay(
     requests: List<PendingRequest>,
     passengers: List<PassengerItem>,
+    recirc: Boolean?,
+    airBusy: Boolean,
     onConfirm: (PendingRequest) -> Unit,
+    onFreshAirAndConfirm: (PendingRequest) -> Unit,
     proposal: TempProposal?,
+    showProposal: Boolean,
     approving: Boolean,
     onApprove: () -> Unit,
     onDecline: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 지도 자리 (내비게이션은 다음 작업)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 8.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(CarColors.MapGray),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 20.dp)
-                .widthIn(max = 680.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // 1) 가장 오래된 불편 알림 하나
-            requests.firstOrNull()?.let { req ->
-                val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
-                val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
-                AlertBanner(
-                    symbol = "♡",
-                    background = CarColors.Alert,
-                    title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
-                    subtitle = "${Seat.label(req.seat)}$more"
-                ) {
+    Column(
+        modifier = Modifier
+            .padding(top = 20.dp)
+            .widthIn(max = 720.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 1) 가장 오래된 불편 요청 하나
+        requests.firstOrNull()?.let { req ->
+            val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
+            val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
+            // 메스꺼워요 + 지금 내기 순환이면 외기 전환을 같이 제안
+            val suggestFreshAir = req.value == Discomfort.NAUSEA && recirc != false
+            AlertBanner(
+                symbol = "♡",
+                background = CarColors.Alert,
+                title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
+                subtitle = if (suggestFreshAir) {
+                    "${Seat.label(req.seat)} · 바깥 공기를 넣으면 메스꺼움에 도움이 돼요$more"
+                } else {
+                    "${Seat.label(req.seat)}$more"
+                }
+            ) {
+                if (suggestFreshAir) {
+                    TextButton(onClick = { onConfirm(req) }, enabled = !airBusy) {
+                        Text("확인만", color = CarColors.SubText)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    GreenButton(
+                        text = if (airBusy) "적용 중..." else "외기로 바꾸고 확인",
+                        enabled = !airBusy,
+                        onClick = { onFreshAirAndConfirm(req) }
+                    )
+                } else {
                     GreenButton(text = "확인", onClick = { onConfirm(req) })
                 }
             }
+        }
 
-            // 2) 희망 온도 제안 (운전자 확인)
+        // 2) 추천 온도 (실내 조율 탭은 화면 안에 따로 있어서 숨김)
+        if (showProposal) {
             proposal?.let { p ->
                 TempProposalBanner(p, approving, onApprove, onDecline)
             }
@@ -925,14 +955,6 @@ private fun HomePreview() {
         onToggleAir = {},
         onEndTrip = {}
     ) {
-        HomeScreen(
-            requests = listOf(PendingRequest("r1", "rear_left", "nausea", null)),
-            passengers = listOf(PassengerItem("rear_left", "현아", true)),
-            onConfirm = {},
-            proposal = TempProposal(23.0),
-            approving = false,
-            onApprove = {},
-            onDecline = {}
-        )
+        HomeScreen()
     }
 }
