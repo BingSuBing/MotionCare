@@ -7,8 +7,15 @@ package com.carfortable.shared
 import kotlin.math.abs
 
 object RecommendRule {
-    /** 정기 재계산 주기: 30분 */
+    /**
+     * 정기 재계산 주기: 30분.
+     * 불편 요청으로 올라간 가중치는 30분이 지나면 빠지므로, 이 주기로 다시 계산해서 원래대로 돌려놔요.
+     * (계산할 때마다 다음 정기 계산은 30분 뒤로 다시 맞춰요)
+     */
     const val REVIEW_INTERVAL_MS = 30 * 60_000L
+
+    /** 누군가 희망 온도를 바꾸면 "바로" 다시 계산. 연속으로 누르는 걸 한 번으로 묶으려고 3초만 기다려요 */
+    const val DESIRED_CHANGE_DELAY_MS = 3_000L
 
     /** 최근 불편 요청을 반영하는 기간: 30분 */
     const val WINDOW_MS = 30 * 60_000L
@@ -124,6 +131,40 @@ fun recommendTemp(
 
     return Recommendation(target, raw, votes, leadSeat, shouldPropose)
 }
+
+/** 언제 다시 계산할지 (passengers 구독에서 이전 값과 비교) */
+enum class ReviewTrigger {
+    /** 누군가 처음 설정을 제출함 → 바로 계산 */
+    FIRST_SUBMIT,
+
+    /** 누군가 희망 온도를 바꿈 → 바로 계산 (DESIRED_CHANGE_DELAY_MS 3초 묶기) */
+    DESIRED_TEMP_CHANGED,
+
+    /** 계산할 필요 없음 (이름·시각 케어 등 다른 값만 바뀜) */
+    NONE,
+}
+
+/**
+ * passengers 변경 → 다시 계산할지 판단.
+ * 불편 요청(바로 계산)은 requests 구독에서 isNewReport()로 따로 판단해요.
+ * @param prev 직전 passengers (좌석 → 탑승자)
+ * @param next 새 passengers
+ */
+fun reviewTrigger(prev: Map<String, Passenger>, next: Map<String, Passenger>): ReviewTrigger {
+    val firstSubmit = next.any { (seat, p) -> p.submittedAt != null && prev[seat]?.submittedAt == null }
+    if (firstSubmit) return ReviewTrigger.FIRST_SUBMIT
+    val seats = prev.keys + next.keys
+    val tempChanged = seats.any { prev[it]?.desiredTemp != next[it]?.desiredTemp }
+    return if (tempChanged) ReviewTrigger.DESIRED_TEMP_CHANGED else ReviewTrigger.NONE
+}
+
+/**
+ * 새 불편 요청이 들어오면 바로 다시 계산해요.
+ * 그 사람의 가중치(메스꺼워요·쉬고 싶어요)나 희망 온도(추워요·더워요)가 즉시 바뀌고,
+ * 바뀐 가중치로 모두의 추천 온도를 다시 계산해요.
+ */
+fun isNewReport(req: CareRequest): Boolean =
+    req.type == RequestType.REPORT_DISCOMFORT && req.status == RequestStatus.PENDING
 
 /** requests 문서 → 계산용 값 (불편 요청만) */
 fun CareRequest.toRecentReport(): RecentReport? {

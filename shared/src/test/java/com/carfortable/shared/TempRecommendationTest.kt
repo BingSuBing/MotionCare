@@ -65,6 +65,35 @@ class TempRecommendationTest {
         assertNull(recommendTemp(mapOf("a" to p("high", null)), emptyList(), now, null))
     }
 
+    @Test fun 처음_제출하면_바로_계산() {
+        val ts = com.google.firebase.Timestamp(1, 0)
+        val prev = mapOf("a" to p("high", 22.0))
+        val next = mapOf("a" to p("high", 22.0).copy(submittedAt = ts))
+        assertEquals(ReviewTrigger.FIRST_SUBMIT, reviewTrigger(prev, next))
+    }
+
+    @Test fun 희망_온도를_바꾸면_바로_계산() {
+        val prev = mapOf("a" to p("high", 22.0))
+        val next = mapOf("a" to p("high", 23.0))
+        assertEquals(ReviewTrigger.DESIRED_TEMP_CHANGED, reviewTrigger(prev, next))
+        assertEquals(3_000L, RecommendRule.DESIRED_CHANGE_DELAY_MS)
+    }
+
+    @Test fun 다른_값만_바뀌면_계산_안_함() {
+        val prev = mapOf("a" to p("high", 22.0))
+        val next = mapOf("a" to p("high", 22.0).copy(name = "현아", visualMode = "dot"))
+        assertEquals(ReviewTrigger.NONE, reviewTrigger(prev, next))
+    }
+
+    @Test fun 새_불편_요청은_바로_계산() {
+        assertTrue(isNewReport(CareRequest(seat = "a", type = RequestType.REPORT_DISCOMFORT, value = Discomfort.NAUSEA)))
+        assertFalse(
+            isNewReport(
+                CareRequest(seat = "a", type = RequestType.REPORT_DISCOMFORT, value = Discomfort.COLD, status = RequestStatus.DONE),
+            ),
+        )
+    }
+
     @Test fun 범위는_18에서_26() {
         val reps = listOf(RecentReport("a", Discomfort.COLD, now))
         val r = recommendTemp(mapOf("a" to p("high", 26.0)), reps, now, null)!!
