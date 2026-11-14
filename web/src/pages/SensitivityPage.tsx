@@ -4,9 +4,9 @@ import { Button, OptionRow, PageHeading, ProgressBar, Screen, TopBar } from '../
 import { useSaving } from '../hooks/useSaving';
 import { updateMyPassenger } from '../lib/passengers';
 import { SENSITIVITY_OPTIONS, TRIGGER_OPTIONS, type Sensitivity, type SicknessTrigger } from '../types';
-import { captionFor, useSessionCtx } from '../session/context';
+import { honorific, useSessionCtx } from '../session/context';
 
-/** M03 이동할 때, 어떠세요? (멀미 민감도) */
+/** 처음 설정 2/3: 멀미 정도 */
 export default function SensitivityPage() {
   const { sid, me, name } = useSessionCtx();
   const navigate = useNavigate();
@@ -25,16 +25,15 @@ export default function SensitivityPage() {
 
   return (
     <Screen
-      header={<TopBar step={3} onBack={() => navigate('../seat')} />}
+      header={<TopBar step={2} total={3} onBack={() => navigate('../seat')} />}
       action={
         <Button onClick={next} disabled={!sensitivity || saving}>
           {saving ? '저장하는 중…' : '실내 취향 설정하기'}
         </Button>
       }
-      caption={captionFor(name)}
     >
       <ProgressBar current={2} />
-      <PageHeading title="이동할 때, 어떠세요?" sub={`${name}님에게 맞는 케어를 준비할게요.`} />
+      <PageHeading title="멀미 정도를 알려주세요" sub={`${honorific(name)}에게 맞는 케어를 준비할게요.`} />
 
       <div className="stack">
         {SENSITIVITY_OPTIONS.map((o) => (
@@ -63,7 +62,6 @@ export default function SensitivityPage() {
       </div>
 
       {error && <div className="info-box info-box--error">{error}</div>}
-      <p className="helper">민감도는 언제든 바꿀 수 있어요. 이 정보는 편안함을 돕기 위한 참고이며 진단에 사용되지 않아요.</p>
     </Screen>
   );
 }

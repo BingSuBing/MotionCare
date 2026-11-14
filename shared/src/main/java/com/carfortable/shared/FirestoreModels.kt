@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3.1) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
+// docs/firestore-schema.md (v0.3.2) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
 // Firestore toObject()를 쓰려면 모든 필드에 기본값이 있어야 해요.
 package com.carfortable.shared
 
@@ -44,14 +44,14 @@ object Discomfort {
     const val NAUSEA = "nausea" // 메스꺼워요 → 알림 + TTS, 외기 제안
     const val COLD = "cold"     // 너무 추워요 → +1℃ 제안
     const val HOT = "hot"       // 너무 더워요 → -1℃ 제안
-    const val STUFFY = "stuffy" // 답답해요 → 외기 제안
+    const val WINDY = "windy"   // 바람이 너무 세요 → 알림 (운전자가 직접 풍량·방향 조정)
     const val REST = "rest"     // 잠깐 쉬고 싶어요 → 알림 + TTS, (2단계) 휴게소 추천
 
     fun label(v: String) = when (v) {
         NAUSEA -> "메스꺼워요"
         COLD -> "너무 추워요"
         HOT -> "너무 더워요"
-        STUFFY -> "답답해요"
+        WINDY -> "바람이 너무 세요"
         REST -> "잠깐 쉬고 싶어요"
         else -> v
     }
@@ -108,6 +108,7 @@ data class Session(
     val active: Boolean = true,
     val tripTitle: String = "",
     val driverName: String = "",
+    val carNumber: String? = null,           // 차량 번호 (예: "136가9762")
     val hvacState: HvacState? = null,
     val route: RouteInfo? = null,
 )
@@ -118,7 +119,9 @@ data class Passenger(
     val sensitivity: String? = null,                 // none | low | medium | high
     val sicknessTriggers: List<String> = emptyList(), // video | screen
     val desiredTemp: Double? = null,                 // 18~26, null = 아직 안 정함
-    val visualMode: String = "dot",                  // off | dot | horizon | minimal
+    val fanPreference: Int? = null,                  // 1 | 2 | 3 희망 풍량 (참고용, 직접 제어 X)
+    val avoidDirectWind: Boolean? = null,            // 직접 바람이 싫으면 true (참고용)
+    val visualMode: String = "off",                  // off | dot | horizon | minimal (메인에서 켬)
     val visualIntensity: Int = 30,                   // 0~100
     val restIntervalMin: Int? = 60,                  // 30 | 60 | 90, null = 꺼짐
     val joinedAt: Timestamp? = null,

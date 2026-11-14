@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3.1) 와 1:1로 맞춘 타입이에요.
+// docs/firestore-schema.md (v0.3.2) 와 1:1로 맞춘 타입이에요.
 // 스키마를 바꿀 때는 문서부터 고치고 이 파일을 따라 고쳐요.
 import type { Timestamp } from 'firebase/firestore';
 
@@ -71,6 +71,8 @@ export interface Session {
   active: boolean;
   tripTitle: string;
   driverName: string;
+  /** 차량 번호 (예: "136가9762"). 없으면 화면에서 생략 */
+  carNumber?: string;
   hvacState?: HvacState;
   route?: RouteInfo;
 }
@@ -101,12 +103,24 @@ export const VISUAL_MODE_LABEL: Record<VisualMode, string> = {
 
 export const REST_INTERVALS = [30, 60, 90] as const;
 
+/** 희망 풍량 (차량 제어 X, 중앙값 가중치 등 알고리즘 참고용) */
+export type FanPreference = 1 | 2 | 3;
+export const FAN_OPTIONS: { value: FanPreference; label: string }[] = [
+  { value: 1, label: '1단 · 약하게' },
+  { value: 2, label: '2단' },
+  { value: 3, label: '3단' },
+];
+export const FAN_LABEL: Record<FanPreference, string> = { 1: '1단 · 약하게', 2: '2단', 3: '3단' };
+
 export interface Passenger {
   uid: string;
   name: string;
   sensitivity: Sensitivity | null;
   sicknessTriggers: SicknessTrigger[];
   desiredTemp: number | null;
+  fanPreference: FanPreference | null;
+  /** 직접 바람이 싫으면 true */
+  avoidDirectWind: boolean | null;
   visualMode: VisualMode;
   visualIntensity: number; // 0~100
   restIntervalMin: number | null; // null = 휴식 알림 꺼짐
@@ -120,7 +134,9 @@ export const PASSENGER_DEFAULTS = {
   sensitivity: null,
   sicknessTriggers: [],
   desiredTemp: null,
-  visualMode: 'dot',
+  fanPreference: null,
+  avoidDirectWind: null,
+  visualMode: 'off',
   visualIntensity: 30,
   restIntervalMin: 60,
   submittedAt: null,
@@ -131,12 +147,12 @@ export const PASSENGER_DEFAULTS = {
 export type RequestType = 'REPORT_DISCOMFORT';
 export type RequestStatus = 'pending' | 'done' | 'failed';
 
-export type Discomfort = 'nausea' | 'cold' | 'hot' | 'stuffy' | 'rest';
+export type Discomfort = 'nausea' | 'cold' | 'hot' | 'windy' | 'rest';
 export const DISCOMFORT_OPTIONS: { value: Discomfort; label: string }[] = [
   { value: 'nausea', label: '메스꺼워요' },
   { value: 'cold', label: '너무 추워요' },
   { value: 'hot', label: '너무 더워요' },
-  { value: 'stuffy', label: '답답해요' },
+  { value: 'windy', label: '바람이 너무 세요' },
   { value: 'rest', label: '잠깐 쉬고 싶어요' },
 ];
 

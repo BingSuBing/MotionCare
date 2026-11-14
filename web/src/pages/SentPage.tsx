@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, Coffee, HeartHandshake, Thermometer, Wind } from 'lucide-react';
+import { Check, Coffee, Fan, HeartHandshake, Thermometer, Wind } from 'lucide-react';
 import { Button, Card, CardTitle, PageHeading, Screen, Seal, StatusPill, TopBar } from '../components/ui';
 import { useRequest } from '../hooks/useRequest';
 import { fmtTime } from '../lib/time';
 import { DISCOMFORT_OPTIONS, SEAT_LABEL, type Discomfort } from '../types';
-import { captionFor, useSessionCtx } from '../session/context';
+import { honorific, useSessionCtx } from '../session/context';
 
 type Step = { icon: ReactNode; title: string; desc: string };
 
@@ -18,8 +18,10 @@ function stepsFor(value: Discomfort, driverName: string, restStop: string | null
       desc: `${driverName ? `${driverName}님이` : '운전자가'} 안전할 때 확인해요.`,
     },
   ];
-  if (value === 'nausea' || value === 'stuffy')
-    steps.push({ icon: <Wind size={20} />, title: '환기 제안', desc: '운전자 확인 후 외기 유입으로 바꿔요.' });
+  if (value === 'nausea')
+    steps.push({ icon: <Fan size={20} />, title: '영상 일시 정지 · 환기 제안', desc: '운전자 확인 후 설정을 조정해요.' });
+  if (value === 'windy')
+    steps.push({ icon: <Wind size={20} />, title: '바람 조절 요청', desc: '운전자가 확인 후 풍량이나 방향을 조정해요.' });
   if (value === 'cold' || value === 'hot')
     steps.push({ icon: <Thermometer size={20} />, title: '온도 조정 제안', desc: '운전자 확인 후 설정을 조정해요.' });
   if (value === 'nausea' || value === 'rest')
@@ -42,13 +44,13 @@ export default function SentPage() {
 
   if (loading)
     return (
-      <Screen header={<TopBar step={9} />} caption={captionFor(name)}>
+      <Screen header={<TopBar />}>
         <PageHeading title="요청을 확인하는 중…" />
       </Screen>
     );
   if (!request || !me)
     return (
-      <Screen header={<TopBar step={9} />} action={back} caption={captionFor(name)}>
+      <Screen header={<TopBar />} action={back}>
         <PageHeading title="요청을 찾을 수 없어요" sub="홈으로 돌아가서 다시 시도해 주세요." />
       </Screen>
     );
@@ -59,8 +61,8 @@ export default function SentPage() {
   const restStop = stop ? `${stop.name} · 약 ${stop.etaMin}분 거리` : null;
 
   return (
-    <Screen header={<TopBar step={9} />} action={back} caption={captionFor(name)}>
-      <PageHeading title="잘 전해드렸어요" sub={`${name}님의 불편 요청이 차량에 도착했어요.`} />
+    <Screen header={<TopBar />} action={back}>
+      <PageHeading title="잘 전해드렸어요" sub={`${honorific(name)}의 불편 요청이 차량에 도착했어요.`} />
 
       <Seal>
         <HeartHandshake size={40} />

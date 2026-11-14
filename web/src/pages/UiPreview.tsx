@@ -103,7 +103,7 @@ export default function UiPreview() {
           { v: 'nausea', label: '메스꺼워요', icon: <Frown size={22} /> },
           { v: 'cold', label: '너무 추워요', icon: <Snowflake size={22} /> },
           { v: 'hot', label: '너무 더워요', icon: <Sun size={22} /> },
-          { v: 'stuffy', label: '답답해요', icon: <Wind size={22} /> },
+          { v: 'windy', label: '바람이 너무 세요', icon: <Wind size={22} /> },
           { v: 'rest', label: '잠깐 쉬고 싶어요', icon: <Coffee size={22} /> },
         ].map((o) => (
           <OptionRow

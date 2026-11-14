@@ -5,13 +5,13 @@ import { Button, Card, CardTitle, OptionRow, PageHeading, Screen, TopBar } from 
 import { useSaving } from '../hooks/useSaving';
 import { sendDiscomfort } from '../lib/requests';
 import { DISCOMFORT_OPTIONS, type Discomfort } from '../types';
-import { captionFor, useSessionCtx } from '../session/context';
+import { honorific, useSessionCtx } from '../session/context';
 
 const DISCOMFORT_ICON: Record<Discomfort, ReactNode> = {
   nausea: <Frown size={22} />,
   cold: <Snowflake size={22} />,
   hot: <Sun size={22} />,
-  stuffy: <Wind size={22} />,
+  windy: <Wind size={22} />,
   rest: <Coffee size={22} />,
 };
 
@@ -20,7 +20,7 @@ const NOUN: Record<Discomfort, string> = {
   nausea: '메스꺼움',
   cold: '추위',
   hot: '더위',
-  stuffy: '답답함',
+  windy: '바람 세기',
   rest: '휴식',
 };
 
@@ -31,7 +31,7 @@ const ADVICE: Record<Discomfort, { title: string; body: string }> = {
   },
   cold: { title: '운전자에게 온도 조정을 제안할게요', body: '담요나 겉옷이 있다면 함께 써 보세요.' },
   hot: { title: '운전자에게 온도 조정을 제안할게요', body: '물을 조금 마시면 도움이 될 수 있어요.' },
-  stuffy: { title: '운전자에게 환기를 제안할게요', body: '외기 유입으로 바꾸면 바깥 공기가 들어와요.' },
+  windy: { title: '운전자에게 바람 조절을 부탁할게요', body: '송풍구 방향을 살짝 돌려 보면 바로 편해질 수 있어요.' },
   rest: { title: '가까운 휴식 장소를 함께 찾아볼게요', body: '운전자가 안전한 곳을 확인하고 알려드려요.' },
 };
 
@@ -53,15 +53,14 @@ export default function DiscomfortPage() {
 
   return (
     <Screen
-      header={<TopBar step={8} onBack={() => navigate('../home')} />}
+      header={<TopBar onBack={() => navigate('../home')} />}
       action={
         <Button onClick={send} disabled={!value || saving}>
           {saving ? '보내는 중…' : value ? `${NOUN[value]} 요청 보내기` : '불편한 점을 골라 주세요'}
         </Button>
       }
-      caption={captionFor(name)}
     >
-      <PageHeading title="어떤 점이 불편한가요?" sub={`${name}님의 상태를 운전자에게 알려드릴게요.`} />
+      <PageHeading title="어떤 점이 불편한가요?" sub={`${honorific(name)}의 상태를 운전자에게 알려드릴게요.`} />
 
       <div className="stack">
         {DISCOMFORT_OPTIONS.map((o) => (

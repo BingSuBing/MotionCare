@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Navigate, Outlet, useParams } from 'react-router-dom';
-import { Notice } from '../components/ui';
+import { Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { Button, Notice } from '../components/ui';
 import { useAnonAuth } from '../hooks/useAnonAuth';
 import { useSession } from '../hooks/useSession';
 import { usePassengers } from '../hooks/usePassengers';
 import { loadName, saveName } from '../lib/nameStore';
+import type { Seat } from '../types';
 import { SessionContext, useSessionCtx, type SessionCtx } from './context';
 
 /**
@@ -21,6 +22,15 @@ export default function SessionLayout() {
 
   const me = useMemo(() => passengers.list.find((p) => p.uid === uid) ?? null, [passengers.list, uid]);
 
+  // 좌석이 있다가 사라지면(운전자가 내보냄) removed 표시. 렌더 중 이전 값과 비교하는 방식이에요.
+  const mySeat: Seat | null = me?.seat ?? null;
+  const [prevSeat, setPrevSeat] = useState<Seat | null>(null);
+  const [removed, setRemoved] = useState(false);
+  if (!passengers.loading && mySeat !== prevSeat) {
+    setRemoved(prevSeat !== null && mySeat === null);
+    setPrevSeat(mySeat);
+  }
+
   if (authError) return <Notice title="로그인에 실패했어요" body={`잠시 후 다시 시도해 주세요. (${authError})`} />;
   if (!uid || session.status === 'loading' || passengers.loading) return <Notice title="차량에 연결하는 중…" />;
   if (session.status === 'error' || passengers.error)
@@ -35,6 +45,8 @@ export default function SessionLayout() {
     session: session.session,
     passengers: passengers.list,
     me,
+    removed,
+    clearRemoved: () => setRemoved(false),
     name: me?.name || storedName,
     setName: (name) => {
       saveName(sid, name);
@@ -63,8 +75,26 @@ export function RequireName() {
   return name ? <Outlet /> : <Navigate to="../name" replace />;
 }
 
-/** 좌석이 없으면 M00으로 (M03 이후 화면) */
+/**
+ * 좌석이 없으면 이름 입력으로 (멀미 정도 이후 화면).
+ * 운전자가 내보낸 경우에는 바로 넘기지 않고 안내를 먼저 보여줘요.
+ */
 export function RequireSeat() {
-  const { me } = useSessionCtx();
-  return me ? <Outlet /> : <Navigate to="../name" replace />;
+  const { me, removed, clearRemoved } = useSessionCtx();
+  const navigate = useNavigate();
+  if (me) return <Outlet />;
+  if (removed)
+    return (
+      <Notice title="좌석 등록이 해제됐어요" body="운전자가 좌석 등록을 해제했어요. 다시 참여하려면 좌석을 선택해 주세요.">
+        <Button
+          onClick={() => {
+            clearRemoved();
+            navigate('../seat', { replace: true });
+          }}
+        >
+          다시 참여하기
+        </Button>
+      </Notice>
+    );
+  return <Navigate to="../name" replace />;
 }

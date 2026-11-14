@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import {
   PASSENGER_DEFAULTS,
   paths,
+  type FanPreference,
   type Seat,
   type Sensitivity,
   type SicknessTrigger,
@@ -72,6 +73,8 @@ export function updateMyPassenger(
     sensitivity?: Sensitivity;
     sicknessTriggers?: SicknessTrigger[];
     desiredTemp?: number;
+    fanPreference?: FanPreference | null;
+    avoidDirectWind?: boolean | null;
     visualMode?: VisualMode;
     restIntervalMin?: number | null;
     submit?: boolean;

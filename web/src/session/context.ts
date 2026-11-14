@@ -10,6 +10,9 @@ export interface SessionCtx {
   passengers: SeatedPassenger[];
   /** 내 좌석 문서. 아직 좌석을 안 골랐으면 null */
   me: SeatedPassenger | null;
+  /** 좌석이 있다가 사라졌는지 (운전자가 내보냄) */
+  removed: boolean;
+  clearRemoved: () => void;
   /** 내 이름: 좌석 문서의 이름 → 없으면 M00에서 입력한 이름 */
   name: string;
   setName: (name: string) => void;
@@ -24,5 +27,5 @@ export function useSessionCtx(): SessionCtx {
   return ctx;
 }
 
-/** 화면 하단 캡션 */
-export const captionFor = (name: string) => (name ? `편안타 · ${name}의 탑승자 케어` : '편안타 · 탑승자 케어');
+/** "현아 님" (이름이 없으면 "탑승자 님") */
+export const honorific = (name: string) => `${name || '탑승자'} 님`;
