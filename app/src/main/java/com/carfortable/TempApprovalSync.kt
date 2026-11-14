@@ -7,8 +7,8 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
-// 웹이 계산한 추천 온도(멀미 민감도 가중치)를 운전자 확인 후 차량에 적용해요
-// 웹: hvacState.medianTemp = 추천 온도, tempStatus = "pending" 기록
+// 차량 TempRecommender가 계산한 추천 온도(멀미 민감도 가중치)를 운전자 확인 후 차량에 적용해요
+// TempRecommender: hvacState.medianTemp = 추천 온도, tempStatus = "pending" 기록
 // 차량: [적용] → 두 구역 온도 적용 → "applied" / [나중에] → "driver_set"
 class TempApprovalSync(
     private val sessionId: String,
@@ -81,7 +81,7 @@ class TempApprovalSync(
     }
 
     private fun evaluate(target: Double?, status: String?) {
-        // 웹이 새 추천 온도를 올렸을 때만 운전자에게 물어봐요
+        // 새 추천 온도가 올라왔을 때만 운전자에게 물어봐요
         if (target == null || status != TempStatus.PENDING) {
             setProposal(null)
             return
@@ -109,7 +109,7 @@ class TempApprovalSync(
         onProposal?.invoke(target)
     }
 
-    // hvacState 안의 필드만 바꿔요 (추천 온도는 웹이 쓰는 값이라 건드리지 않음)
+    // hvacState 안의 필드만 바꿔요 (추천 온도는 TempRecommender가 쓰는 값이라 건드리지 않음)
     private fun writeState(driverTemp: Double?, passengerTemp: Double?, tempStatus: String?) {
         val data = hashMapOf<String, Any>(
             "hvacState.updatedAt" to FieldValue.serverTimestamp()
@@ -125,7 +125,7 @@ class TempApprovalSync(
     companion object {
         private const val TAG = "MotionCare"
 
-        // 웹이 쓰는 추천 온도 필드 (B님과 이름이 다르면 여기만 바꾸면 돼요)
+        // 추천 온도 필드 (스키마 v0.3.3: 이름은 medianTemp 유지, 의미는 추천 온도)
         const val TARGET_TEMP_FIELD = "hvacState.medianTemp"
 
         // docs/firestore-schema.md: 운전자가 직접 정한 온도 유지

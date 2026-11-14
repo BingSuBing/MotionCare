@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
     private var hvac: HvacController? = null
     private var session: SessionManager? = null
     private var tempSync: TempApprovalSync? = null
+    private var recommender: TempRecommender? = null
     private var requestSync: CareRequestSync? = null
     private var watcher: SessionWatcher? = null
 
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         joinUrl = SessionManager.joinUrl(sid)
                         startWatcher(sid)
                         startTempSync(sid, h)
+                        startRecommender(sid, h)
                         startRequestSync(sid)
                     }
                     .onFailure { e ->
@@ -139,7 +141,14 @@ class MainActivity : ComponentActivity() {
         watcher = w
     }
 
-    // 4) 웹이 올린 추천 온도를 운전자 확인 후 적용
+    // 4-1) 추천 온도 계산 (passengers + requests 구독, 30분 타이머)
+    private fun startRecommender(sid: String, hvac: HvacController) {
+        val r = TempRecommender(sid, hvac)
+        r.start()
+        recommender = r
+    }
+
+    // 4-2) 추천 온도를 운전자 확인 후 적용
     private fun startTempSync(sid: String, hvac: HvacController) {
         val sync = TempApprovalSync(sid, hvac)
         sync.onStatus = { text -> Log.d(TAG, "온도 동기화: $text") }
@@ -200,6 +209,8 @@ class MainActivity : ComponentActivity() {
         watcher = null
         tempSync?.stop()
         tempSync = null
+        recommender?.stop()
+        recommender = null
         requestSync?.stop()
         requestSync = null
         vehicle?.release()

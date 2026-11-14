@@ -22,7 +22,7 @@ data class CabinState(
     val passengerTemp: Double? = null,
     val tempStatus: String? = null,
     val recirc: Boolean? = null,
-    val targetTemp: Double? = null   // 웹이 계산한 추천 온도
+    val targetTemp: Double? = null   // 차량 TempRecommender가 계산한 추천 온도
 )
 
 // passengers, 세션 문서(hvacState)를 구독해서 화면에 넘겨요

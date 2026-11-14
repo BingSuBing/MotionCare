@@ -635,7 +635,7 @@ private fun TempCard(title: String, temp: Double?, caption: String, modifier: Mo
     }
 }
 
-// 웹에서 보내는 값이 정해지면 shared로 옮겨요
+// shared Passenger.sensitivity: none | low | medium | high
 private fun sensitivityLabel(value: String?): String = when (value?.lowercase()) {
     null, "" -> "미입력"
     "none" -> "없음"
