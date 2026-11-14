@@ -104,7 +104,7 @@ fun weightedAverage(votes: List<SeatVote>): Double? {
 /**
  * 추천 온도 계산 (차량 앱이 30분마다, 그리고 즉시 재계산 조건에서 호출)
  * @param passengers 좌석 → 탑승자 (passengers 문서 ID가 좌석)
- * @param reports 불편 요청들 (기간 밖은 알아서 걸러요)
+ * @param reports 불편 요청들 (30분보다 오래된 건 알아서 걸러요)
  * @param currentTemp 지금 실내 온도 (모르면 null)
  */
 fun recommendTemp(
@@ -113,7 +113,9 @@ fun recommendTemp(
     nowMs: Long,
     currentTemp: Double?,
 ): Recommendation? {
-    val recent = reports.filter { it.atMs in (nowMs - RecommendRule.WINDOW_MS)..nowMs }
+    // 위쪽 끝(now)은 두지 않아요: 차량 시계가 서버보다 늦으면 방금 온 요청(createdAt = 서버 시각)이
+    // now보다 미래로 보여서 빠질 수 있어요.
+    val recent = reports.filter { it.atMs >= nowMs - RecommendRule.WINDOW_MS }
     val votes = passengers.mapNotNull { (seat, p) ->
         val mine = recent.filter { it.seat == seat }
         effectiveTemp(p, mine)?.let { SeatVote(seat, it, sicknessWeight(p, mine)) }

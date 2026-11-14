@@ -99,4 +99,11 @@ class TempRecommendationTest {
         val r = recommendTemp(mapOf("a" to p("high", 26.0)), reps, now, null)!!
         assertEquals(26.0, r.temp, 0.0)
     }
+
+    @Test fun 차량_시계가_늦어도_방금_온_요청은_반영() {
+        // 요청 시각(서버)이 차량 now보다 5초 뒤
+        val reps = listOf(RecentReport("a", Discomfort.NAUSEA, now + 5_000))
+        val r = recommendTemp(mapOf("a" to p("medium", 20.0), "b" to p("high", 25.0)), reps, now, null)!!
+        assertEquals(22.0, r.temp, 0.0)
+    }
 }
