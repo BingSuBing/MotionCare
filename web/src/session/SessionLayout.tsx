@@ -61,6 +61,9 @@ export default function SessionLayout() {
   );
 }
 
+/** /s/{sid}/{page} 절대 경로 */
+const sessionPath = (sid: string, page: string) => `/s/${encodeURIComponent(sid)}/${page}`;
+
 /** /s/:sid 로 들어오면 내 상태에 맞는 화면으로 보내요 (web-screens.md "진입 분기") */
 export function StartRedirect() {
   const { me } = useSessionCtx();
@@ -71,8 +74,9 @@ export function StartRedirect() {
 
 /** 이름이 없으면 M00으로 */
 export function RequireName() {
-  const { name } = useSessionCtx();
-  return name ? <Outlet /> : <Navigate to="../name" replace />;
+  const { sid, name } = useSessionCtx();
+  // 경로 없는 감싸기 라우트라 '..'가 세션 밖으로 나가요 → 항상 절대 경로로 보내요
+  return name ? <Outlet /> : <Navigate to={sessionPath(sid, 'name')} replace />;
 }
 
 /**
@@ -80,7 +84,7 @@ export function RequireName() {
  * 운전자가 내보낸 경우에는 바로 넘기지 않고 안내를 먼저 보여줘요.
  */
 export function RequireSeat() {
-  const { me, removed, clearRemoved } = useSessionCtx();
+  const { sid, me, removed, clearRemoved } = useSessionCtx();
   const navigate = useNavigate();
   if (me) return <Outlet />;
   if (removed)
@@ -89,12 +93,12 @@ export function RequireSeat() {
         <Button
           onClick={() => {
             clearRemoved();
-            navigate('../seat', { replace: true });
+            navigate(sessionPath(sid, 'seat'), { replace: true });
           }}
         >
           다시 참여하기
         </Button>
       </Notice>
     );
-  return <Navigate to="../name" replace />;
+  return <Navigate to={sessionPath(sid, 'name')} replace />;
 }
