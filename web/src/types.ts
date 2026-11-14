@@ -106,6 +106,20 @@ export const VISUAL_MODE_LABEL: Record<VisualMode, string> = {
   minimal: '최소 시각 신호',
 };
 
+/** 안내 방식 설명 (나만의 케어) */
+export const VISUAL_MODE_DESC: Record<Exclude<VisualMode, 'off'>, string> = {
+  dot: '양쪽 가장자리의 점이 몸이 쏠리는 방향으로 움직여요',
+  horizon: '양쪽 가장자리의 수평선이 차와 함께 기울어요',
+  minimal: '쏠리는 쪽 가장자리만 은은하게 빛나요',
+};
+
+/** 안내 강도 (visualIntensity 0~100) */
+export const VISUAL_INTENSITIES = [
+  { value: 30, label: '약하게' },
+  { value: 60, label: '보통' },
+  { value: 90, label: '강하게' },
+] as const;
+
 export const REST_INTERVALS = [30, 60, 90] as const;
 
 /** 희망 풍량 (차량 제어 X, 추천 알고리즘 참고용) */

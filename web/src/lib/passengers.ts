@@ -76,6 +76,7 @@ export function updateMyPassenger(
     fanPreference?: FanPreference | null;
     avoidDirectWind?: boolean | null;
     visualMode?: VisualMode;
+    visualIntensity?: number;
     restIntervalMin?: number | null;
     submit?: boolean;
   },

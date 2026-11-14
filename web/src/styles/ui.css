@@ -861,3 +861,157 @@
   outline: 3px solid var(--c-brand);
   outline-offset: 2px;
 }
+
+/* ---------- 시각 케어 (MotionCueCanvas) ---------- */
+/* 앱 폭(.screen 430px)에 맞춰서 PC에서도 화면 가장자리에 붙어 보여요 */
+.motion-cue {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100vw, 430px);
+  height: 100dvh;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.motion-cue--contained {
+  position: absolute;
+  left: 0;
+  transform: none;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* iOS: 움직임 센서는 버튼을 눌러야 허용돼요 */
+.cue-permission {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 101;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--c-deep);
+  white-space: nowrap;
+  color: var(--c-white);
+  font-size: var(--fs-helper);
+  font-weight: var(--fw-bold);
+  box-shadow: var(--shadow);
+}
+
+/* 나만의 케어 미리보기 */
+.cue-preview {
+  position: relative;
+  height: 180px;
+  border-radius: var(--r-md);
+  background: var(--c-white);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.cue-preview__content {
+  position: absolute;
+  inset: var(--sp-3) 72px;
+  display: grid;
+  align-content: center;
+  gap: var(--sp-1);
+}
+
+.cue-preview__content span {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface);
+}
+
+.cue-preview__content span:nth-child(2n) {
+  width: 70%;
+}
+
+.cue-preview__badge {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sp-1);
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 2px var(--sp-1);
+  border-radius: var(--r-pill);
+  background: var(--c-tint);
+  color: var(--c-deep);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+}
+
+/* 영상 보며 시각 케어 */
+.watch {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-md);
+  background: var(--c-ink);
+  overflow: hidden;
+}
+
+.watch--big {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.watch__video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.watch__empty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-1);
+  color: var(--c-white);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+
+.watch__toggle {
+  position: absolute;
+  top: var(--sp-1);
+  right: var(--sp-1);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--c-white);
+  color: var(--c-ink);
+  opacity: 0.85;
+}
+
+.watch--big .watch__toggle {
+  top: calc(var(--sp-2) + env(safe-area-inset-top));
+  right: var(--sp-2);
+}
+
+/* ?debug 상태 표시 */
+.cue-debug {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  z-index: 102;
+  padding: 4px var(--sp-1);
+  background: var(--c-ink);
+  color: var(--c-white);
+  font-size: var(--fs-caption);
+  pointer-events: none;
+}
