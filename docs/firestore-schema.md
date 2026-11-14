@@ -3,8 +3,8 @@
 > 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/src/main/java/com/carfortable/shared/FirestoreModels.kt`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
-- 버전: **v0.3.2** (작성: 이수빈) — 모바일 디자인 수정(처음 설정 3단계, 시각 케어 분리) 반영
-- 공조 범위: **온도(희망 온도 중앙값) + 외기/내기 전환**. 풍량·바람 방향·조명은 다루지 않아요.
+- 버전: **v0.3.3** (작성: 이수빈) — 추천 온도 알고리즘(30분마다 가중치 재계산, 운전자 확인 후 적용)
+- 공조 범위: **온도(추천 온도: 멀미 가중평균, 운전자 확인 후 적용) + 외기/내기 전환**. 풍량·바람 방향·조명은 다루지 않아요.
 
 ---
 
@@ -90,21 +90,37 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 | 외기/내기 | 공통 | 공통 | 공통 | ✅ (SDK 지원 A 확인 필요) |
 | 풍량, 바람 방향, 전원/A/C, 김서림, 조명 | | | | ❌ 제외 |
 
-### 3.2 온도: 모두의 희망 온도 중앙값
+### 3.2 온도: 추천 온도 (30분마다 가중치를 바꿔 다시 계산)
 
-1. 각 동승자가 M04에서 **희망 온도**를 정해요. 웹 버튼은 **1℃ 단위**, 범위는 **18~26℃**예요. 값은 `passengers/{seat}.desiredTemp`에 저장돼요.
-2. 차량 앱은 `passengers`를 구독하다가 값이 바뀌면 **중앙값**을 계산해요.
-   - 대상: `desiredTemp`가 `null`이 아닌 좌석만
-   - 홀수 명이면 가운데 값, 짝수 명이면 가운데 두 값의 평균
-   - **0.5℃ 단위로 반올림**하고 **18~26℃로 제한**해요
-   - 예: [20, 22, 25] → 22 / [22, 24] → 23
-3. 계산한 값을 **운전석·조수석 구역 둘 다**에 적용해요. 앞뒤를 나누지 않고 실내 전체를 한 온도로 맞춰요.
-4. 마지막 변경 후 **3초** 뒤에 계산해요(연타 방지).
-5. 적용 방식
-   - **1단계**: 계산하면 바로 적용 → `tempStatus: "applied"`
-   - **2단계**: 차량 화면에 "모두의 희망 온도 23℃로 맞출까요?" 원터치 승인 → 승인 전에는 `"pending"`, 승인하면 `"applied"`
-   - 운전자가 차량에서 온도를 직접 바꾸면 → `"driver_set"`
-   - 차량 적용에 실패하면(1단계 포함) → `"pending"`. 다음에 희망 온도가 바뀌면 다시 시도해요.
+**한 줄 요약**: 차량 앱이 **30분마다** 탑승자별 가중치를 다시 정하고, 희망 온도의 **가중평균**으로 추천 온도를 계산해요. 멀미를 많이 느끼는 사람일수록 가중치가 커서 추천 온도가 그 사람 쪽으로 더 가까워져요. 적용은 **운전자가 확인한 뒤에** 해요.
+
+1. 동승자는 **희망 온도**(`passengers/{seat}.desiredTemp`, 18~26℃, 1℃ 단위)를 정해요. 메인에서도 바로 바꿀 수 있어요.
+2. **계산은 차량 앱만** 해요 (웹은 결과만 읽어요). 코드: `shared/.../TempRecommendation.kt`의 `recommendTemp()`
+3. **가중치** (회차마다 다시 계산)
+
+   | 항목 | 가중치 |
+   |---|---|
+   | 멀미 민감도 `sensitivity` | 없음 1 / 낮음 1.5 / 보통 2 / **높음 3** (미입력 1) |
+   | 추가 항목 `sicknessTriggers` | 1개당 +0.25 |
+   | 최근 30분 "메스꺼워요" | 1회당 +2 (최대 +4) |
+   | 최근 30분 "잠깐 쉬고 싶어요" | +1 |
+
+   - 최근 30분 "너무 추워요"면 그 사람의 희망 온도를 +1℃, "너무 더워요"면 −1℃로 보고 계산해요 (가장 마지막 요청만).
+4. **가중평균**: 각자의 희망 온도에 가중치를 곱해서 더한 뒤, 가중치 합으로 나눠요. 가중치가 모두 같으면 일반 평균과 같아요.
+   - 예: 현아(높음, 3) 22℃, 윤지(없음, 1) 25℃, 성윤(없음, 1) 26℃
+     → (22×3 + 25×1 + 26×1) ÷ 5 = 23.4 → **23.5℃** (그냥 평균 24.3℃보다 현아 쪽)
+   - 예: 현아(보통 2 + 최근 메스꺼워요 2 = 4) 20℃, 윤지(높음, 3) 25℃
+     → (20×4 + 25×3) ÷ 7 = 22.1 → **22℃**
+5. **안전장치**: 0.5℃ 단위로 반올림하고 18~26℃ 안에서만 추천해요. 한 번에 **최대 2℃까지만** 바꿔요 (예: 지금 26℃, 계산 20℃ → 이번엔 24℃).
+6. **언제 계산하나**
+   - **정기**: 30분마다 (`nextReviewAt`)
+   - **즉시**: 탑승자가 처음 제출했을 때, "메스꺼워요"가 들어왔을 때
+7. **운전자 확인** (`TempApprovalSync`)
+   - 지금 온도와 0.5℃ 이상 다르면 `medianTemp`에 추천 온도, `tempStatus: "pending"` 기록 → 차량 화면에 [적용] / [나중에]
+   - [적용] → 운전석·조수석 두 구역 적용 → `"applied"`
+   - [나중에] → 공조 그대로 → `"driver_set"` (다음 회차에 다시 계산)
+   - 차이가 0.5℃ 미만이면 제안하지 않고 `reviewedAt`, `nextReviewAt`만 갱신
+8. 가중치 숫자는 `RecommendRule`에 모여 있어서 시연하면서 쉽게 조정할 수 있어요.
 
 ### 3.3 외기/내기
 
@@ -134,9 +150,12 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 | `driverTemp` | number | 운전석 구역 실제 온도(℃), SDK에서 읽은 값 |
 | `passengerTemp` | number | 조수석 구역 실제 온도(℃), SDK에서 읽은 값 |
 | `airIntake` | string | `outside`(외기 유입) \| `recirc`(내기 순환), SDK에서 읽은 값 |
-| `medianTemp` | number \| null | 마지막으로 계산한 희망 온도 중앙값 |
-| `voteCount` | number | 중앙값 계산에 쓴 희망 온도 개수 |
-| `tempStatus` | string | `applied`(적용됨) \| `pending`(운전자 적용 대기 또는 적용 실패) \| `driver_set`(운전자가 직접 설정) |
+| `medianTemp` | number \| null | **추천 온도** (가중평균, 3.2). 이름은 호환을 위해 그대로 둬요 |
+| `voteCount` | number | 계산에 쓴 희망 온도 개수 |
+| `leadSeat` | string \| null | 이번 회차 가중치가 가장 큰 좌석 (단독 1위일 때만). 웹: "현아 님의 멀미를 더 고려했어요" |
+| `reviewedAt` | Timestamp \| null | 마지막 계산 시각 |
+| `nextReviewAt` | Timestamp \| null | 다음 정기 계산 시각 (보통 30분 뒤). 웹: "다음 조정 11:30" |
+| `tempStatus` | string | `pending`(운전자 확인 대기) \| `applied`(적용됨) \| `driver_set`(운전자가 보류·직접 설정) |
 | `updatedAt` | Timestamp | 마지막으로 반영된 시각 |
 
 - 웹 M07의 "현재 실내 온도"는 두 구역이 같으면 그 값, 다르면 평균(0.5℃ 반올림)을 보여줘요.
@@ -248,8 +267,8 @@ sessions/test01
 ```
 
 - **테스트 전 정리**: 차량 앱이 `test01`을 다시 만들어도(`set`) 하위 `passengers`, `requests` 문서는 남아요. 예전 희망 온도가 중앙값에 섞이지 않게 콘솔에서 지우고 시작해요. 둘이 동시에 테스트할 땐 서로 알려요.
-- **개인 개발 세션**: `local.properties`에 `devSessionId=subin01`처럼 적으면 debug 빌드가 그 ID로 세션을 만들고, 시작할 때 하위 `passengers`, `requests`를 자동으로 비워요(공용 `test01`은 비우지 않아요). 이 자동 정리는 테스트 모드에서만 동작하고, 보안 규칙(8장)을 적용한 뒤에는 콘솔에서 지워야 해요. release 빌드는 항상 무작위 ID를 써요.
 - **B(웹) 단독 테스트**: 콘솔에서 `hvacState` 값을 바꾸면 M07이 따라 바뀌어야 해요. `passengers/front_right`를 직접 만들면 M02에서 조수석이 "사용 중"이 돼야 해요.
+- **추천 온도 테스트**: 콘솔에서 `passengers`에 민감도와 희망 온도가 다른 문서 2~3개를 만들고, 차량 앱에서 즉시 계산(또는 30분 대기) → 차량 화면에 확인 요청이 떠야 해요.
 - **A(차량) 단독 테스트**
   - 온도: `passengers/rear_left`(`desiredTemp: 22`), `passengers/front_right`(`desiredTemp: 24`) 생성 → 23℃로 바뀌어야 해요.
   - 불편: `requests`에 `{ seat: "rear_left", uid: "console", type: "REPORT_DISCOMFORT", value: "nausea", status: "pending" }` 추가 → 차량 화면 알림이 떠야 해요.
@@ -284,7 +303,9 @@ service cloud.firestore {
         allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
         allow update: if signedIn() && resource.data.uid == request.auth.uid
                       && request.resource.data.uid == request.auth.uid;
-        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+        // 본인 또는 차량(운전자가 내보내기)
+        allow delete: if signedIn() && (resource.data.uid == request.auth.uid
+                      || request.auth.uid == carUidOf());
       }
 
       match /requests/{rid} {
@@ -315,3 +336,4 @@ service cloud.firestore {
 | v0.3 | 2026-11-13 | 디자인(M01~M09) 반영. 풍량·조명 제외, 희망 온도 중앙값을 실내 전체에 적용(`tempStatus`), 외기는 차량 앱만 제어, QR 1개 + 앱에서 좌석 선택, 이름 입력(M00), 민감도 4단계·시각 케어·휴식 간격, 불편 알리기(`REPORT_DISCOMFORT`) |
 | v0.3.1 | 2026-11-13 | `sessions.carUid` 추가 (보안 규칙에서 차량 앱/폰 구별), 보안 규칙 초안 추가 |
 | v0.3.2 | 2026-11-14 | 모바일 디자인 수정 반영: `sessions.carNumber`, `passengers.fanPreference`·`avoidDirectWind` 추가(참고용), `visualMode` 기본 `off`(시각 케어 분리), 불편 종류 `stuffy` → `windy`(바람이 너무 세요) |
+| v0.3.3 | 2026-11-14 | 추천 온도: 30분마다 가중치 재계산(멀미가 큰 사람에게 큰 가중치), 가중평균, 최대 2℃ 변화, 운전자 확인 후 적용. `hvacState.leadSeat`·`reviewedAt`·`nextReviewAt` 추가. 보안 규칙: 차량이 탑승자 삭제 가능 |

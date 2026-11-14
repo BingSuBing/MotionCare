@@ -7,14 +7,13 @@ import {
   SENSITIVITY_OPTIONS,
   TEMP_STATUS_LABEL,
   fmtTemp,
-  medianTemp,
 } from '../types';
+import { fmtTime } from '../lib/time';
 import { honorific, useSessionCtx } from '../session/context';
 
 /**
  * 제출 완료
- * 피그마의 "함께 조율한 추천"은 다른 내용으로 바뀔 예정이라,
- * 그 자리에 지금 동작하는 "모두의 희망 온도"(중앙값)를 보여줘요.
+ * "함께 조율한 추천 온도": 차량 앱이 30분마다 멀미 가중치로 계산한 값 (스키마 3.2)
  */
 export default function DonePage() {
   const { me, name, passengers, session } = useSessionCtx();
@@ -23,10 +22,8 @@ export default function DonePage() {
 
   const hvac = session.hvacState;
   const voters = passengers.filter((p) => typeof p.desiredTemp === 'number');
-  const preview = medianTemp(voters.map((p) => p.desiredTemp));
-  const shown = hvac?.medianTemp ?? preview;
-  const synced = hvac?.medianTemp != null && hvac.medianTemp === preview;
-  const statusLabel = synced && hvac ? TEMP_STATUS_LABEL[hvac.tempStatus] : '차량에 전달 중';
+  const lead = hvac?.leadSeat ? passengers.find((p) => p.seat === hvac.leadSeat) : undefined;
+  const nextReview = hvac?.nextReviewAt?.toDate();
 
   const rows: [string, string][] = [
     ['멀미 민감도', SENSITIVITY_OPTIONS.find((o) => o.value === me.sensitivity)?.label ?? '-'],
@@ -35,9 +32,7 @@ export default function DonePage() {
     ['휴식 알림', me.restIntervalMin ? `${me.restIntervalMin}분마다` : '꺼짐'],
   ];
 
-  const voteText =
-    voters.map((p) => `${p.name || '탑승자'} ${fmtTemp(p.desiredTemp as number)}°`).join(' · ') +
-    (voters.length > 1 && preview != null ? ` → 중앙값 ${fmtTemp(preview)}°` : '');
+  const voteText = voters.map((p) => `${p.name || '탑승자'} ${fmtTemp(p.desiredTemp as number)}°`).join(' · ');
 
   return (
     <Screen
@@ -69,12 +64,20 @@ export default function DonePage() {
       </Card>
 
       <Card tone="tint">
-        <CardTitle>모두의 희망 온도</CardTitle>
-        <p className="big-number card-gap">{shown != null ? `${fmtTemp(shown)}°C` : '-'}</p>
-        {voters.length > 0 && <p className="card-text">{voteText}</p>}
-        <div className="card-gap">
-          <StatusPill tone="neutral">{statusLabel}</StatusPill>
-        </div>
+        <CardTitle>함께 조율한 추천 온도</CardTitle>
+        {hvac?.medianTemp != null ? (
+          <>
+            <p className="big-number card-gap">{fmtTemp(hvac.medianTemp)}°C</p>
+            {lead && <p className="card-text">멀미를 가장 많이 느끼는 {honorific(lead.name)}을 더 고려했어요.</p>}
+            {voters.length > 0 && <p className="card-text">{voteText}</p>}
+            <div className="card-gap row-between">
+              <StatusPill tone="neutral">{TEMP_STATUS_LABEL[hvac.tempStatus]}</StatusPill>
+              {nextReview && <span className="saved-note">다음 조정 {fmtTime(nextReview)}</span>}
+            </div>
+          </>
+        ) : (
+          <p className="card-text card-gap">모두의 희망 온도와 멀미 정도를 모아 추천 온도를 계산하고 있어요.</p>
+        )}
       </Card>
     </Screen>
   );

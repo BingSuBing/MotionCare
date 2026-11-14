@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3.2) 와 1:1로 맞춘 타입이에요.
+// docs/firestore-schema.md (v0.3.3) 와 1:1로 맞춘 타입이에요.
 // 스키마를 바꿀 때는 문서부터 고치고 이 파일을 따라 고쳐요.
 import type { Timestamp } from 'firebase/firestore';
 
@@ -21,7 +21,7 @@ export const isSeat = (v: unknown): v is Seat =>
 export const TEMP_MIN = 18;
 export const TEMP_MAX = 26;
 export const TEMP_UI_STEP = 1; // 웹 ± 버튼 단위
-export const TEMP_ROUND_STEP = 0.5; // 중앙값 반올림 단위
+export const TEMP_ROUND_STEP = 0.5; // 추천 온도 반올림 단위
 export const NAME_MAX = 10;
 
 export type AirIntake = 'outside' | 'recirc';
@@ -33,8 +33,8 @@ export const AIR_INTAKE_LABEL: Record<AirIntake, string> = {
 export type TempStatus = 'applied' | 'pending' | 'driver_set';
 export const TEMP_STATUS_LABEL: Record<TempStatus, string> = {
   applied: '적용됨',
-  pending: '운전자 적용 대기',
-  driver_set: '운전자가 설정함',
+  pending: '운전자 확인 대기',
+  driver_set: '운전자가 정한 온도 유지',
 };
 
 /* ---------- sessions/{sessionId} ---------- */
@@ -43,8 +43,13 @@ export interface HvacState {
   driverTemp: number;
   passengerTemp: number;
   airIntake: AirIntake;
+  /** 추천 온도 (멀미 가중평균, 차량 앱이 30분마다 계산) */
   medianTemp: number | null;
   voteCount: number;
+  /** 이번 회차 가중치 1위 좌석 (단독일 때만) */
+  leadSeat?: Seat | null;
+  reviewedAt?: Timestamp | null;
+  nextReviewAt?: Timestamp | null;
   tempStatus: TempStatus;
   updatedAt?: Timestamp;
 }
@@ -103,7 +108,7 @@ export const VISUAL_MODE_LABEL: Record<VisualMode, string> = {
 
 export const REST_INTERVALS = [30, 60, 90] as const;
 
-/** 희망 풍량 (차량 제어 X, 중앙값 가중치 등 알고리즘 참고용) */
+/** 희망 풍량 (차량 제어 X, 추천 알고리즘 참고용) */
 export type FanPreference = 1 | 2 | 3;
 export const FAN_OPTIONS: { value: FanPreference; label: string }[] = [
   { value: 1, label: '1단 · 약하게' },
@@ -172,7 +177,7 @@ export interface CareRequest {
 export const clampTemp = (t: number): number =>
   Math.min(TEMP_MAX, Math.max(TEMP_MIN, Math.round(t / TEMP_ROUND_STEP) * TEMP_ROUND_STEP));
 
-/** 희망 온도 중앙값. 희망 온도가 없으면 null (차량 앱 Kotlin 과 같은 규칙) */
+/** (이전 방식) 일반 중앙값. 지금 추천 온도는 차량 앱의 가중평균(TempRecommendation.kt)을 써요 */
 export const medianTemp = (temps: (number | null | undefined)[]): number | null => {
   const v = temps.filter((t): t is number => typeof t === 'number').sort((a, b) => a - b);
   if (v.length === 0) return null;
