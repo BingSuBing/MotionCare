@@ -14,7 +14,15 @@ import {
 import { updateMyPassenger } from '../lib/passengers';
 import { initialTemp } from '../lib/temp';
 import { fmtTime, nextTick, useNow } from '../lib/time';
-import { AIR_INTAKE_LABEL, REST_INTERVALS, VISUAL_MODE_LABEL, cabinTemp, fmtTemp, type VisualMode } from '../types';
+import {
+  AIR_INTAKE_LABEL,
+  REST_INTERVALS,
+  TEMP_STATUS_LABEL,
+  VISUAL_MODE_LABEL,
+  cabinTemp,
+  fmtTemp,
+  type VisualMode,
+} from '../types';
 import { honorific, useSessionCtx } from '../session/context';
 
 const VISUAL_ICON: Record<VisualMode, ReactNode> = {
@@ -88,6 +96,12 @@ export default function HomePage() {
           <>
             <p className="big-number card-gap">{fmtTemp(cabinTemp(hvac))}°C</p>
             <p className="card-strong">{AIR_INTAKE_LABEL[hvac.airIntake] ?? hvac.airIntake}</p>
+            {hvac.medianTemp != null && (
+              <p className="card-text">
+                추천 {fmtTemp(hvac.medianTemp)}°C · {TEMP_STATUS_LABEL[hvac.tempStatus]}
+                {hvac.nextReviewAt ? ` · 다음 조정 ${fmtTime(hvac.nextReviewAt.toDate())}` : ''}
+              </p>
+            )}
           </>
         ) : (
           <p className="card-text">차량 공조 정보를 기다리고 있어요.</p>

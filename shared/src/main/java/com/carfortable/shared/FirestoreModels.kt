@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3.2) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
+// docs/firestore-schema.md (v0.3.3) 와 1:1로 맞춘 모델 (초안: B 작성, A가 패키지명/위치 조정)
 // Firestore toObject()를 쓰려면 모든 필드에 기본값이 있어야 해요.
 package com.carfortable.shared
 
@@ -84,6 +84,9 @@ data class HvacState(
     val airIntake: String = AirIntake.RECIRC,
     val medianTemp: Double? = null,
     val voteCount: Int = 0,
+    val leadSeat: String? = null,       // 이번 회차 가중치 1위 좌석 (단독일 때만)
+    val reviewedAt: Timestamp? = null,  // 마지막 추천 계산 시각
+    val nextReviewAt: Timestamp? = null,// 다음 정기 계산 시각 (30분 뒤)
     val tempStatus: String = TempStatus.APPLIED,
     val updatedAt: Timestamp? = null,
 )

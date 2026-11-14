@@ -151,7 +151,7 @@ export default function UiPreview() {
           23°C
         </p>
         <p className="helper" style={{ marginTop: 8, fontSize: 14 }}>
-          수빈 24° · 지훈 22° · 지민 23° → 중앙값 23°
+          수빈 24° · 지훈 22° · 지민 23°
         </p>
       </Card>
 
