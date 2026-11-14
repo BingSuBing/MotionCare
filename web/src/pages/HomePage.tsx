@@ -37,7 +37,7 @@ const SAVE_DELAY_MS = 800;
 /**
  * 메인 (이동 중)
  * - 현재 실내 환경 / 내 희망 온도(바로 수정)
- * - 시각 케어 시작·바꾸기 / 휴식 알림 시간 바꾸기 / 내 설정 바꾸기
+ * - 시각 케어 시작·바꾸기 / 휴식 알림 시간 바꾸기
  * - 큼지막한 "불편해요" 버튼
  */
 export default function HomePage() {
@@ -181,9 +181,6 @@ export default function HomePage() {
         <p className="helper helper--below">
           메스껍거나 춥다면 아래 버튼으로 알려주세요. 운전자가 확인하고 케어를 조정할 수 있어요.
         </p>
-        <Button variant="tertiary" onClick={() => navigate('../sensitivity')}>
-          내 설정 바꾸기 →
-        </Button>
       </div>
     </Screen>
   );
