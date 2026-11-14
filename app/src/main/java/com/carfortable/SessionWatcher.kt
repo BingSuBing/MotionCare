@@ -13,7 +13,9 @@ data class PassengerItem(
     val submitted: Boolean,
     val desiredTemp: Double? = null,
     val sensitivity: String? = null,
-    val restIntervalMin: Int? = null
+    val restIntervalMin: Int? = null,
+    val fanPreference: Int? = null,
+    val avoidDirectWind: Boolean? = null
 )
 
 // 화면 표시용: 현재 실내 상태 (하단바)
@@ -50,7 +52,9 @@ class SessionWatcher(private val sessionId: String) {
                             submitted = doc.get("submittedAt") != null,
                             desiredTemp = (doc.get("desiredTemp") as? Number)?.toDouble(),
                             sensitivity = doc.get("sensitivity")?.toString(),
-                            restIntervalMin = (doc.get("restIntervalMin") as? Number)?.toInt()
+                            restIntervalMin = (doc.get("restIntervalMin") as? Number)?.toInt(),
+                            fanPreference = (doc.get("fanPreference") as? Number)?.toInt(),
+                            avoidDirectWind = doc.getBoolean("avoidDirectWind")
                         )
                     }
                     ?.sortedBy { seatOrder(it.seat) }
@@ -80,6 +84,12 @@ class SessionWatcher(private val sessionId: String) {
     fun removePassenger(seat: String) {
         db.document("${Paths.passengers(sessionId)}/$seat").delete()
             .addOnFailureListener { e -> Log.e(TAG, "탑승자 삭제 실패: $seat", e) }
+    }
+
+    // 운전자가 탑승자 이름을 바꿀 때
+    fun renamePassenger(seat: String, name: String) {
+        db.document("${Paths.passengers(sessionId)}/$seat").update("name", name)
+            .addOnFailureListener { e -> Log.e(TAG, "이름 변경 실패: $seat", e) }
     }
 
     // 차량에 외기/내기 적용이 끝난 뒤 기록

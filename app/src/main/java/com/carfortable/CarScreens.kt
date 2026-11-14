@@ -17,11 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -223,19 +226,13 @@ private fun PassengerPanel(
     }
 
     removeTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text("탑승자 내보내기") },
-            text = { Text("${target.name} 님(${Seat.label(target.seat)})을 이번 여정에서 뺄까요?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRemove(target)
-                    removeTarget = null
-                }) { Text("내보내기") }
+        RemovePassengerDialog(
+            target = target,
+            onConfirm = {
+                onRemove(target)
+                removeTarget = null
             },
-            dismissButton = {
-                TextButton(onClick = { removeTarget = null }) { Text("취소") }
-            }
+            onDismiss = { removeTarget = null }
         )
     }
 }
@@ -278,8 +275,12 @@ fun CarShell(
     cabin: CabinState,
     airBusy: Boolean,
     onToggleAir: () -> Unit,
+    onEndTrip: () -> Unit,
+    overlay: @Composable () -> Unit = {},
     content: @Composable () -> Unit
 ) {
+    var confirmEnd by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize().background(CarColors.Background)) {
         // 상단바
         Row(
@@ -290,6 +291,10 @@ fun CarShell(
             Spacer(Modifier.width(8.dp))
             Text("PYEONANTA", fontSize = 11.sp, color = CarColors.SubText)
             Spacer(Modifier.weight(1f))
+            TextButton(onClick = { confirmEnd = true }) {
+                Text("여정 종료", color = CarColors.SubText, fontSize = 14.sp)
+            }
+            Spacer(Modifier.width(12.dp))
             ClockText()
         }
 
@@ -305,6 +310,10 @@ fun CarShell(
             }
             Box(modifier = Modifier.weight(1f).fillMaxHeight().padding(end = 20.dp, bottom = 8.dp)) {
                 content()
+                // 알림은 어느 탭에 있든 위쪽에 떠요
+                Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                    overlay()
+                }
             }
         }
 
@@ -326,6 +335,27 @@ fun CarShell(
             )
         }
     }
+
+    if (confirmEnd) {
+        EndTripDialog(
+            onConfirm = {
+                confirmEnd = false
+                onEndTrip()
+            },
+            onDismiss = { confirmEnd = false }
+        )
+    }
+}
+
+@Composable
+private fun EndTripDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("여정을 끝낼까요?") },
+        text = { Text("탑승자 연결이 끊기고 처음 화면(QR)으로 돌아가요.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("여정 종료") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
 }
 
 @Composable
@@ -388,50 +418,75 @@ private fun formatTemp(t: Double): String =
 data class TempProposal(val target: Double)
 
 @Composable
-fun HomeScreen(
+fun HomeScreen() {
+    // 지도 자리 (내비게이션은 2단계)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(CarColors.MapGray),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
+    }
+}
+
+// 모든 탭 위에 뜨는 알림: 불편 요청 + 추천 온도
+@Composable
+fun AlertsOverlay(
     requests: List<PendingRequest>,
     passengers: List<PassengerItem>,
+    recirc: Boolean?,
+    airBusy: Boolean,
     onConfirm: (PendingRequest) -> Unit,
+    onFreshAirAndConfirm: (PendingRequest) -> Unit,
     proposal: TempProposal?,
+    showProposal: Boolean,
     approving: Boolean,
     onApprove: () -> Unit,
     onDecline: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 지도 자리 (내비게이션은 다음 작업)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 8.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(CarColors.MapGray),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("지도 영역 (내비게이션 연동 예정)", color = CarColors.SubText)
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 20.dp)
-                .widthIn(max = 680.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // 1) 가장 오래된 불편 알림 하나
-            requests.firstOrNull()?.let { req ->
-                val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
-                val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
-                AlertBanner(
-                    symbol = "♡",
-                    background = CarColors.Alert,
-                    title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
-                    subtitle = "${Seat.label(req.seat)}$more"
-                ) {
+    Column(
+        modifier = Modifier
+            .padding(top = 20.dp)
+            .widthIn(max = 720.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 1) 가장 오래된 불편 요청 하나
+        requests.firstOrNull()?.let { req ->
+            val name = passengers.firstOrNull { it.seat == req.seat }?.name ?: Seat.label(req.seat)
+            val more = if (requests.size > 1) " · 대기 알림 ${requests.size - 1}건 더" else ""
+            // 메스꺼워요 + 지금 내기 순환이면 외기 전환을 같이 제안
+            val suggestFreshAir = req.value == Discomfort.NAUSEA && recirc != false
+            AlertBanner(
+                symbol = "♡",
+                background = CarColors.Alert,
+                title = "$name 님이 '${Discomfort.label(req.value)}' 알림을 보냈어요.",
+                subtitle = if (suggestFreshAir) {
+                    "${Seat.label(req.seat)} · 바깥 공기를 넣으면 메스꺼움에 도움이 돼요$more"
+                } else {
+                    "${Seat.label(req.seat)}$more"
+                }
+            ) {
+                if (suggestFreshAir) {
+                    TextButton(onClick = { onConfirm(req) }, enabled = !airBusy) {
+                        Text("확인만", color = CarColors.SubText)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    GreenButton(
+                        text = if (airBusy) "적용 중..." else "외기로 바꾸고 확인",
+                        enabled = !airBusy,
+                        onClick = { onFreshAirAndConfirm(req) }
+                    )
+                } else {
                     GreenButton(text = "확인", onClick = { onConfirm(req) })
                 }
             }
+        }
 
-            // 2) 희망 온도 제안 (운전자 확인)
+        // 2) 추천 온도 (실내 조율 탭은 화면 안에 따로 있어서 숨김)
+        if (showProposal) {
             proposal?.let { p ->
                 TempProposalBanner(p, approving, onApprove, onDecline)
             }
@@ -497,6 +552,206 @@ private fun GreenButton(text: String, onClick: () -> Unit, enabled: Boolean = tr
     ) {
         Text(text)
     }
+}
+
+// ───────────────────────── 3. 탑승자 ─────────────────────────
+
+@Composable
+fun PassengersScreen(
+    driverName: String,
+    cabin: CabinState,
+    passengers: List<PassengerItem>,
+    onRename: (PassengerItem, String) -> Unit,
+    onRemove: (PassengerItem) -> Unit,
+    onGoClimate: () -> Unit
+) {
+    var renameTarget by remember { mutableStateOf<PassengerItem?>(null) }
+    var removeTarget by remember { mutableStateOf<PassengerItem?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("각자의 편안함을 한눈에", fontSize = 26.sp,
+            fontWeight = FontWeight.Bold, color = CarColors.Text)
+        Spacer(Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            DriverCard(driverName, cabin)
+            passengers.forEach { p ->
+                PassengerCard(
+                    p = p,
+                    onRename = { renameTarget = p },
+                    onRemove = { removeTarget = p }
+                )
+            }
+            if (passengers.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .width(240.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CarColors.Card),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("참가한 탑승자가 없어요", color = CarColors.SubText)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(CarColors.Card)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("휴대폰에서는 내 취향만, 차량에서는 함께 조율해요.",
+                    fontWeight = FontWeight.Bold, color = CarColors.Text)
+                Text("운전자만 공조와 경유지를 최종 적용할 수 있어요.",
+                    fontSize = 13.sp, color = CarColors.SubText)
+            }
+            GreenButton(text = "실내 취향 조율하기 →", onClick = onGoClimate)
+        }
+    }
+
+    renameTarget?.let { target ->
+        RenameDialog(
+            target = target,
+            onConfirm = { name ->
+                onRename(target, name)
+                renameTarget = null
+            },
+            onDismiss = { renameTarget = null }
+        )
+    }
+    removeTarget?.let { target ->
+        RemovePassengerDialog(
+            target = target,
+            onConfirm = {
+                onRemove(target)
+                removeTarget = null
+            },
+            onDismiss = { removeTarget = null }
+        )
+    }
+}
+
+@Composable
+private fun DriverCard(driverName: String, cabin: CabinState) {
+    InfoCard(
+        symbol = "🚗",
+        name = driverName,
+        seat = "운전석",
+        chip = "운전자",
+        temp = cabin.driverTemp?.let { "${formatTemp(it)}℃" } ?: "--",
+        lines = listOf("현재 운전석 설정 온도", "차량 설정·경로 관리"),
+        actions = {}
+    )
+}
+
+@Composable
+private fun PassengerCard(p: PassengerItem, onRename: () -> Unit, onRemove: () -> Unit) {
+    InfoCard(
+        symbol = "☺",
+        name = p.name,
+        seat = Seat.label(p.seat),
+        chip = "멀미 민감도 · ${sensitivityLabel(p.sensitivity)}",
+        temp = p.desiredTemp?.let { "${formatTemp(it)}℃" } ?: "미입력",
+        lines = listOf(
+            if (p.submitted) "취향 제출 완료" else "취향 입력 중",
+            windText(p),
+            p.restIntervalMin?.let { "휴식 알림 ${it}분" } ?: "휴식 알림 없음"
+        ),
+        actions = {
+            TextButton(onClick = onRename) {
+                Text("이름 수정", color = CarColors.Green, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = onRemove) {
+                Text("연결 해제", color = CarColors.SubText)
+            }
+        }
+    )
+}
+
+// 희망 풍량·직접 바람 (참고용, 차량 직접 제어 X)
+private fun windText(p: PassengerItem): String {
+    val fan = p.fanPreference?.let { "바람 ${it}단" } ?: "바람 미입력"
+    return if (p.avoidDirectWind == true) "$fan · 직접 바람 싫어요" else fan
+}
+
+@Composable
+private fun InfoCard(
+    symbol: String,
+    name: String,
+    seat: String,
+    chip: String,
+    temp: String,
+    lines: List<String>,
+    actions: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(240.dp)
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(20.dp))
+            .background(CarColors.Card)
+            .padding(20.dp)
+    ) {
+        Text(symbol, fontSize = 24.sp, color = CarColors.Green)
+        Spacer(Modifier.height(10.dp))
+        Text(name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
+        Text(seat, fontSize = 13.sp, color = CarColors.SubText)
+        Spacer(Modifier.height(10.dp))
+        Pill(text = chip)
+        Spacer(Modifier.height(14.dp))
+        Text(temp, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
+        Spacer(Modifier.height(10.dp))
+        lines.forEach { Text(it, fontSize = 13.sp, color = CarColors.SubText) }
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) { actions() }
+    }
+}
+
+@Composable
+private fun RenameDialog(target: PassengerItem, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember(target.seat) { mutableStateOf(target.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${Seat.label(target.seat)} 이름 수정") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { if (it.length <= 10) name = it },
+                singleLine = true,
+                label = { Text("이름") }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim()) },
+                enabled = name.isNotBlank()
+            ) { Text("저장") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
+}
+
+@Composable
+private fun RemovePassengerDialog(target: PassengerItem, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("탑승자 연결 해제") },
+        text = { Text("${target.name} 님(${Seat.label(target.seat)})을 이번 여정에서 뺄까요?") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("연결 해제") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
 }
 
 // ───────────────────────── 4. 실내 조율 ─────────────────────────
@@ -697,16 +952,9 @@ private fun HomePreview() {
         onTab = {},
         cabin = CabinState(driverTemp = 22.0, recirc = true, targetTemp = 23.0),
         airBusy = false,
-        onToggleAir = {}
+        onToggleAir = {},
+        onEndTrip = {}
     ) {
-        HomeScreen(
-            requests = listOf(PendingRequest("r1", "rear_left", "nausea", null)),
-            passengers = listOf(PassengerItem("rear_left", "현아", true)),
-            onConfirm = {},
-            proposal = TempProposal(23.0),
-            approving = false,
-            onApprove = {},
-            onDecline = {}
-        )
+        HomeScreen()
     }
 }
