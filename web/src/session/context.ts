@@ -10,6 +10,9 @@ export interface SessionCtx {
   passengers: SeatedPassenger[];
   /** 내 좌석 문서. 아직 좌석을 안 골랐으면 null */
   me: SeatedPassenger | null;
+  /** 좌석이 있다가 사라졌는지 (운전자가 내보냄) */
+  removed: boolean;
+  clearRemoved: () => void;
   /** 내 이름: 좌석 문서의 이름 → 없으면 M00에서 입력한 이름 */
   name: string;
   setName: (name: string) => void;

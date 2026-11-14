@@ -3,7 +3,7 @@
 > 이 문서가 **기준**이에요. 차량 앱(Kotlin, `shared/src/main/java/com/carfortable/shared/FirestoreModels.kt`)과 웹(TS, `web/src/types.ts`)은 여기 적힌 이름을 그대로 써요.
 > 필드 이름이나 값을 바꿀 때는 **이 문서부터 고치고**, PR 제목에 `[schema]`를 붙여요.
 
-- 버전: **v0.3.1** (작성: 이수빈) — Figma "편안타" 디자인(M01~M09) 반영, 차량 식별용 `carUid` 추가
+- 버전: **v0.3.2** (작성: 이수빈) — 모바일 디자인 수정(처음 설정 3단계, 시각 케어 분리) 반영
 - 공조 범위: **온도(희망 온도 중앙값) + 외기/내기 전환**. 풍량·바람 방향·조명은 다루지 않아요.
 
 ---
@@ -20,9 +20,9 @@ sessions/{sessionId}                 ← 차량 앱이 생성 (차 1대 = 세션
 **사용자 흐름 (동승자 폰)**
 
 ```
-QR 스캔 → M00 이름 입력 → M01 참여하기 → M02 좌석 선택 → M03 민감도
-       → M04 희망 온도 → M05 시각 케어·휴식 → M06 제출 완료
-       → M07 이동 중 홈 ⇄ M08 불편 알리기 → M09 전달 완료
+QR 스캔 → 이름 입력 → 초대 받기
+       → [처음 설정 1/3] 좌석 → [2/3] 멀미 정도 → [3/3] 희망 온도·풍량·휴식 알림 → 제출 완료
+       → 메인(이동 중) ⇄ 시각 케어 설정 / 불편 알리기 → 전달 완료
 ```
 
 - **사람 구별**: 폰(브라우저)마다 Firebase **익명 로그인 uid**가 따로 생겨요. 같은 QR로 4명이 들어와도 uid 4개로 구별돼요. 새로고침하거나 QR을 다시 찍어도 같은 uid가 유지돼요.
@@ -108,7 +108,7 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 ### 3.3 외기/내기
 
 - **폰에는 외기 버튼이 없어요.** 차량 앱(운전자)만 바꿔요.
-- 동승자가 M08에서 "답답해요"나 "메스꺼워요"를 보내면, 차량 앱이 운전자에게 **외기 전환을 원터치로 제안**해요.
+- 동승자가 "메스꺼워요"를 보내면, 차량 앱이 운전자에게 **외기 전환을 원터치로 제안**해요.
 - 현재 상태는 `hvacState.airIntake`에 기록하고, 폰 M07에서 "외기 유입 중 / 내기 순환 중"으로 보여줘요.
 
 ---
@@ -121,7 +121,8 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 | `createdAt` | Timestamp | 차량 | 세션 생성 시각 |
 | `active` | boolean | 차량 | 이동 중이면 `true`, 끝나면 `false`. 웹은 `false`면 "이동이 끝났어요" 화면을 보여줘요 |
 | `tripTitle` | string | 차량 | M01 카드 제목. 예: "우리 가족 · 서울 → 강릉" |
-| `driverName` | string | 차량 | M01 "건호님의 차량에서 초대했어요", M02 운전석 "건호 · 사용 중" |
+| `driverName` | string | 차량 | "재현 님의 초대를 받았어요", 좌석 화면 운전석 칸 |
+| `carNumber` | string \| 없음 | 차량 | 차량 번호. 예: "136가9762". "136가9762의 편안타에 참여할게요" (없으면 생략) |
 | `hvacState` | map | 차량 | 현재 공조 상태 (아래 4.1) |
 | `route` | map \| 없음 | 차량 | 2단계. 경로 정보 (아래 4.2) |
 
@@ -160,12 +161,14 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 |---|---|---|---|---|
 | `uid` | string | | M02 | 익명 로그인 uid |
 | `name` | string | 최대 10자 | M00 | 표시 이름. 예: "수빈" |
-| `sensitivity` | string \| null | `none` \| `low` \| `medium` \| `high` | M03 | 없음 / 낮음 / 보통 / 높음 |
-| `sicknessTriggers` | string[] | `video`, `screen` | M03 | "영상 시청 시 멀미가 잘 나요", "차량 이동 중 화면 보기 불편해요" |
-| `desiredTemp` | number \| null | 18~26, 1℃ 단위 | M04 | 희망 온도. `null`이면 아직 안 정함 |
-| `visualMode` | string | `off` \| `dot` \| `horizon` \| `minimal` | M05 | 사용 안 함 / 움직이는 점 / 수평선 / 최소 시각 신호 |
-| `visualIntensity` | number | 0~100 | M05 | 시각 안내 강도(%), 기본 30 |
-| `restIntervalMin` | number \| null | 30 \| 60 \| 90 | M05 | 정기 휴식 알림 간격. `null`이면 꺼짐 |
+| `sensitivity` | string \| null | `none` \| `low` \| `medium` \| `high` | 설정 2/3 | 없음 / 낮음 / 보통 / 높음 |
+| `sicknessTriggers` | string[] | `video`, `screen` | 설정 2/3 | "영상 시청 시 멀미가 잘 나요", "차량 이동 중 화면 보기 불편해요" |
+| `desiredTemp` | number \| null | 18~26, 1℃ 단위 | 설정 3/3, 메인 | 희망 온도. `null`이면 아직 안 정함. 메인에서 바로 바꿀 수 있어요 |
+| `fanPreference` | number \| null | 1 \| 2 \| 3 | 설정 3/3 | 희망 풍량(1단·약하게 / 2단 / 3단). **차량을 직접 제어하지 않고** 취향 조율(가중치) 참고용 |
+| `avoidDirectWind` | boolean \| null | | 설정 3/3 | "직접 바람은 싫어요"면 `true`, "괜찮아요"면 `false` (참고용) |
+| `visualMode` | string | `off` \| `dot` \| `horizon` \| `minimal` | 시각 케어 | 사용 안 함 / 움직이는 점 / 수평선 / 최소 시각 신호. **처음 설정에서 빠지고 메인에서 켜요** (기본 `off`) |
+| `visualIntensity` | number | 0~100 | 시각 케어 | 시각 안내 강도(%), 기본 30 |
+| `restIntervalMin` | number \| null | 30 \| 60 \| 90 | 설정 3/3, 메인 | 정기 휴식 알림 간격. `null`이면 꺼짐 |
 | `joinedAt` | Timestamp | | M02 | 좌석 등록 시각 |
 | `submittedAt` | Timestamp \| null | | M06 | 설정 제출 시각. 값이 있으면 다시 접속할 때 M07로 바로 가요 |
 | `updatedAt` | Timestamp | | | |
@@ -183,7 +186,7 @@ runTransaction:
 ```
 
 - 제출 전에 좌석을 바꾸면 이전 좌석 문서를 지워요.
-- 기본값: `sensitivity: null`, `sicknessTriggers: []`, `desiredTemp: null`, `visualMode: "dot"`, `visualIntensity: 30`, `restIntervalMin: 60`, `submittedAt: null`
+- 기본값: `sensitivity: null`, `sicknessTriggers: []`, `desiredTemp: null`, `fanPreference: null`, `avoidDirectWind: null`, `visualMode: "off"`, `visualIntensity: 30`, `restIntervalMin: 60`, `submittedAt: null`
 
 ### 5.2 다시 접속했을 때
 
@@ -218,7 +221,7 @@ M08 **불편 알리기** 전용이에요. 문서 ID는 자동 생성(`add()`)이
 | `nausea` | 메스꺼워요 | 알림 + TTS, 외기 전환 제안, (2단계) 휴게소 추천 |
 | `cold` | 너무 추워요 | 알림, 온도 +1℃ 제안 |
 | `hot` | 너무 더워요 | 알림, 온도 −1℃ 제안 |
-| `stuffy` | 답답해요 | 알림, 외기 전환 제안 |
+| `windy` | 바람이 너무 세요 | 알림 (운전자가 풍량·방향을 직접 조정) |
 | `rest` | 잠깐 쉬고 싶어요 | 알림 + TTS, (2단계) 가까운 휴게소 추천 |
 
 - 폰은 문서가 만들어지면 바로 M09 "잘 전해드렸어요"를 보여줘요.
@@ -236,7 +239,8 @@ sessions/test01
   createdAt  : (timestamp) 지금
   active     : true
   tripTitle  : "우리 가족 · 서울 → 강릉"
-  driverName : "건호"
+  driverName : "재현"
+  carNumber  : "136가9762"
   hvacState  : { driverTemp: 22, passengerTemp: 22, airIntake: "recirc",
                  medianTemp: null, voteCount: 0, tempStatus: "applied",
                  updatedAt: (timestamp) 지금 }
@@ -308,3 +312,4 @@ service cloud.firestore {
 | v0.2 | 2026-11-12 | 좌석별 공조 제약 반영 |
 | v0.3 | 2026-11-13 | 디자인(M01~M09) 반영. 풍량·조명 제외, 희망 온도 중앙값을 실내 전체에 적용(`tempStatus`), 외기는 차량 앱만 제어, QR 1개 + 앱에서 좌석 선택, 이름 입력(M00), 민감도 4단계·시각 케어·휴식 간격, 불편 알리기(`REPORT_DISCOMFORT`) |
 | v0.3.1 | 2026-11-13 | `sessions.carUid` 추가 (보안 규칙에서 차량 앱/폰 구별), 보안 규칙 초안 추가 |
+| v0.3.2 | 2026-11-14 | 모바일 디자인 수정 반영: `sessions.carNumber`, `passengers.fanPreference`·`avoidDirectWind` 추가(참고용), `visualMode` 기본 `off`(시각 케어 분리), 불편 종류 `stuffy` → `windy`(바람이 너무 세요) |
