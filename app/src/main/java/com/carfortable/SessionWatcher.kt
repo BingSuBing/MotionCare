@@ -10,15 +10,19 @@ import com.google.firebase.firestore.ListenerRegistration
 data class PassengerItem(
     val seat: String,
     val name: String,
-    val submitted: Boolean
+    val submitted: Boolean,
+    val desiredTemp: Double? = null,
+    val sensitivity: String? = null,
+    val restIntervalMin: Int? = null
 )
 
 // 화면 표시용: 현재 실내 상태 (하단바)
 data class CabinState(
     val driverTemp: Double? = null,
+    val passengerTemp: Double? = null,
+    val tempStatus: String? = null,
     val recirc: Boolean? = null,
-    val medianTemp: Double? = null,
-    val voteCount: Int = 0
+    val targetTemp: Double? = null   // 차량 TempRecommender가 계산한 추천 온도
 )
 
 // passengers, 세션 문서(hvacState)를 구독해서 화면에 넘겨요
@@ -43,7 +47,10 @@ class SessionWatcher(private val sessionId: String) {
                         PassengerItem(
                             seat = doc.id,
                             name = doc.getString("name")?.takeIf { it.isNotBlank() } ?: "탑승자",
-                            submitted = doc.get("submittedAt") != null
+                            submitted = doc.get("submittedAt") != null,
+                            desiredTemp = (doc.get("desiredTemp") as? Number)?.toDouble(),
+                            sensitivity = doc.get("sensitivity")?.toString(),
+                            restIntervalMin = (doc.get("restIntervalMin") as? Number)?.toInt()
                         )
                     }
                     ?.sortedBy { seatOrder(it.seat) }
@@ -60,9 +67,10 @@ class SessionWatcher(private val sessionId: String) {
                 if (snap == null || !snap.exists()) return@addSnapshotListener
                 val state = CabinState(
                     driverTemp = (snap.get("hvacState.driverTemp") as? Number)?.toDouble(),
+                    passengerTemp = (snap.get("hvacState.passengerTemp") as? Number)?.toDouble(),
+                    tempStatus = snap.getString("hvacState.tempStatus"),
                     recirc = snap.getString("hvacState.airIntake")?.let { it == AIR_RECIRC },
-                    medianTemp = (snap.get("hvacState.medianTemp") as? Number)?.toDouble(),
-                    voteCount = (snap.get("hvacState.voteCount") as? Number)?.toInt() ?: 0
+                    targetTemp = (snap.get(TempApprovalSync.TARGET_TEMP_FIELD) as? Number)?.toDouble()
                 )
                 onCabin?.invoke(state)
             }

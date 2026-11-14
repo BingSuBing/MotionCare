@@ -23,7 +23,8 @@ class MainActivity : ComponentActivity() {
     private var vehicle: Vehicle? = null
     private var hvac: HvacController? = null
     private var session: SessionManager? = null
-    private var tempSync: TempMedianSync? = null
+    private var tempSync: TempApprovalSync? = null
+    private var recommender: TempRecommender? = null
     private var requestSync: CareRequestSync? = null
     private var watcher: SessionWatcher? = null
 
@@ -37,6 +38,8 @@ class MainActivity : ComponentActivity() {
     private var cabin by mutableStateOf(CabinState())
     private var airBusy by mutableStateOf(false)
     private var pendingRequests by mutableStateOf<List<PendingRequest>>(emptyList())
+    private var proposal by mutableStateOf<TempProposal?>(null)
+    private var approving by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +70,7 @@ class MainActivity : ComponentActivity() {
                         joinUrl = SessionManager.joinUrl(sid)
                         startWatcher(sid)
                         startTempSync(sid, h)
+                        startRecommender(sid, h)
                         startRequestSync(sid)
                     }
                     .onFailure { e ->
@@ -102,7 +106,21 @@ class MainActivity : ComponentActivity() {
                                     CarTab.HOME -> HomeScreen(
                                         requests = pendingRequests,
                                         passengers = passengers,
-                                        onConfirm = { req -> requestSync?.acknowledge(req.id) }
+                                        onConfirm = { req -> requestSync?.acknowledge(req.id) },
+                                        proposal = proposal,
+                                        approving = approving,
+                                        onApprove = { approveTemp() },
+                                        onDecline = { tempSync?.decline() }
+                                    )
+                                    CarTab.CLIMATE -> ClimateScreen(
+                                        passengers = passengers,
+                                        cabin = cabin,
+                                        proposal = proposal,
+                                        approving = approving,
+                                        airBusy = airBusy,
+                                        onApprove = { approveTemp() },
+                                        onDecline = { tempSync?.decline() },
+                                        onToggleAir = { toggleAirIntake() }
                                     )
                                     else -> ComingSoonScreen(tab)
                                 }
@@ -123,10 +141,20 @@ class MainActivity : ComponentActivity() {
         watcher = w
     }
 
-    // 4) 희망 온도 중앙값 적용 시작
+    // 4-1) 추천 온도 계산 (passengers + requests 구독, 30분 타이머)
+    private fun startRecommender(sid: String, hvac: HvacController) {
+        val r = TempRecommender(sid, hvac)
+        r.start()
+        recommender = r
+    }
+
+    // 4-2) 추천 온도를 운전자 확인 후 적용
     private fun startTempSync(sid: String, hvac: HvacController) {
-        val sync = TempMedianSync(sid, hvac)
+        val sync = TempApprovalSync(sid, hvac)
         sync.onStatus = { text -> Log.d(TAG, "온도 동기화: $text") }
+        sync.onProposal = { target ->
+            runOnUiThread { proposal = target?.let { TempProposal(it) } }
+        }
         sync.start()
         tempSync = sync
     }
@@ -137,6 +165,21 @@ class MainActivity : ComponentActivity() {
         sync.onChange = { items -> runOnUiThread { pendingRequests = items } }
         sync.start()
         requestSync = sync
+    }
+
+    // 추천 온도 [적용]: 차량에 적용, 실패하면 제안은 그대로 남아요
+    private fun approveTemp() {
+        val sync = tempSync ?: return
+        if (approving) return
+        approving = true
+        sync.approve { ok ->
+            runOnUiThread {
+                approving = false
+                if (!ok) {
+                    Toast.makeText(this, "온도 적용에 실패했어요. 다시 눌러 주세요", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     // 하단바 외기/내기 버튼: 차량에 먼저 적용하고, 성공하면 Firestore에 기록
@@ -166,6 +209,8 @@ class MainActivity : ComponentActivity() {
         watcher = null
         tempSync?.stop()
         tempSync = null
+        recommender?.stop()
+        recommender = null
         requestSync?.stop()
         requestSync = null
         vehicle?.release()
