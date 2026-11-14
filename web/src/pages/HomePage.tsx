@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlignCenter, ChevronRight, Coffee, EyeOff, Minus, Orbit } from 'lucide-react';
+import { AlignCenter, ChevronRight, Coffee, EyeOff, Minus, Orbit, PlayCircle } from 'lucide-react';
 import {
   Button,
   Card,
@@ -24,6 +24,7 @@ import {
   type VisualMode,
 } from '../types';
 import { honorific, useSessionCtx } from '../session/context';
+import { MOTION_STATUS_LABEL, useMotionCue } from '../components/motion/context';
 
 const VISUAL_ICON: Record<VisualMode, ReactNode> = {
   off: <EyeOff size={26} />,
@@ -44,6 +45,7 @@ export default function HomePage() {
   const { sid, me, session } = useSessionCtx();
   const navigate = useNavigate();
   const now = useNow();
+  const cue = useMotionCue();
 
   // 희망 온도: 누를 때마다 바로 보이고, 0.8초 뒤 한 번만 저장
   const [temp, setTemp] = useState(() => initialTemp(me?.desiredTemp, session.hvacState));
@@ -125,12 +127,30 @@ export default function HomePage() {
               {visualOn ? `${VISUAL_MODE_LABEL[me.visualMode]} 케어` : '움직이는 점 케어 시작하기'}
             </p>
             <p className="icon-row__sub">
-              {visualOn ? `강도 ${me.visualIntensity}% · 눌러서 방식 바꾸기` : '화면 가장자리 안내로 시각적 편안함을 도와요'}
+              {visualOn
+                ? `${cue.paused ? '잠시 멈춤' : MOTION_STATUS_LABEL[cue.status]} · 눌러서 방식 바꾸기`
+                : '화면 가장자리 안내로 시각적 편안함을 도와요'}
             </p>
           </div>
           <ChevronRight size={20} className="icon-row__chevron" />
         </div>
       </button>
+
+      {/* 영상 보며 시각 케어 (iOS는 이 화면 안에서만 영상 위에 안내가 떠요) */}
+      {visualOn && (
+        <button type="button" className="card card-button" onClick={() => navigate('../watch')}>
+          <div className="icon-row">
+            <span className="icon-row__icon">
+              <PlayCircle size={26} />
+            </span>
+            <div>
+              <p className="icon-row__title">영상 보며 시각 케어</p>
+              <p className="icon-row__sub">영상 위에 차의 움직임을 함께 보여줘요</p>
+            </div>
+            <ChevronRight size={20} className="icon-row__chevron" />
+          </div>
+        </button>
+      )}
 
       {/* 휴식 알림: 시간 바꾸기 */}
       <Card>

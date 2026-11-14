@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { Button, Notice } from '../components/ui';
+import MotionCueProvider from '../components/motion/MotionCueProvider';
 import { useAnonAuth } from '../hooks/useAnonAuth';
 import { useSession } from '../hooks/useSession';
 import { usePassengers } from '../hooks/usePassengers';
@@ -56,7 +57,9 @@ export default function SessionLayout() {
 
   return (
     <SessionContext.Provider value={ctx}>
-      <Outlet />
+      <MotionCueProvider>
+        <Outlet />
+      </MotionCueProvider>
     </SessionContext.Provider>
   );
 }

@@ -12,6 +12,7 @@ import DonePage from './pages/DonePage';
 import HomePage from './pages/HomePage';
 import DiscomfortPage from './pages/DiscomfortPage';
 import SentPage from './pages/SentPage';
+import WatchPage from './pages/WatchPage';
 import SessionLayout, { RequireName, RequireSeat, StartRedirect } from './session/SessionLayout';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="sensitivity" element={<SensitivityPage />} />
           <Route path="climate" element={<ClimatePage />} />
           <Route path="care" element={<CarePage />} />
+          <Route path="watch" element={<WatchPage />} />
           <Route path="done" element={<DonePage />} />
           <Route path="home" element={<HomePage />} />
           <Route path="discomfort" element={<DiscomfortPage />} />
