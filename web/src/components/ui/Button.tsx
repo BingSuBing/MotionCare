@@ -10,12 +10,13 @@ type Variant = 'primary' | 'brand' | 'secondary' | 'tertiary';
  */
 export function Button({
   variant = 'primary',
+  size = 'md',
   block = true,
   className = '',
   type = 'button',
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; block?: boolean }) {
-  const cls = ['btn', `btn--${variant}`, block && variant !== 'tertiary' ? 'btn--block' : '', className]
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'md' | 'lg'; block?: boolean }) {
+  const cls = ['btn', `btn--${variant}`, block && variant !== 'tertiary' ? 'btn--block' : '', size === 'lg' ? 'btn--lg' : '', className]
     .filter(Boolean)
     .join(' ');
   return <button type={type} className={cls} {...rest} />;

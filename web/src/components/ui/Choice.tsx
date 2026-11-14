@@ -57,17 +57,21 @@ export function OptionRow({
 /** 칩 (선택됨 / 사용 중 / 선택 가능, 상태 표시용) */
 export function Chip({
   selected = false,
+  tone = 'default',
   onClick,
   children,
 }: {
   selected?: boolean;
+  /** white: 흰 바탕 칩 (M02 범례 "선택 가능") */
+  tone?: 'default' | 'white';
   onClick?: () => void;
   children: ReactNode;
 }) {
+  const cls = `chip${selected ? ' chip--selected' : ''}${tone === 'white' ? ' chip--white' : ''}`;
   // onClick이 없으면 누를 수 없는 표시용 칩 (M02 범례)
   if (!onClick) {
     return (
-      <span className={`chip${selected ? ' chip--selected' : ''}`}>
+      <span className={cls}>
         {selected && <Check size={16} strokeWidth={3} />}
         {children}
       </span>
@@ -76,7 +80,7 @@ export function Chip({
   return (
     <button
       type="button"
-      className={`chip${selected ? ' chip--selected' : ''}`}
+      className={cls}
       onClick={onClick}
       aria-pressed={selected}
     >
@@ -92,14 +96,17 @@ export function Segmented<T extends string | number>({
   value,
   onChange,
   showCheck = false,
+  tone = 'default',
 }: {
   options: { value: T; label: string }[];
   value: T | null;
   onChange: (v: T) => void;
   showCheck?: boolean;
+  /** white: 캔버스 위에 바로 놓일 때 흰 바탕 (M03 풍량) */
+  tone?: 'default' | 'white';
 }) {
   return (
-    <div className="segments" role="radiogroup">
+    <div className={`segments${tone === 'white' ? ' segments--white' : ''}`} role="radiogroup">
       {options.map((o) => {
         const on = o.value === value;
         return (

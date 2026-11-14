@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Button, PageHeading, Screen, TopBar } from '../components/ui';
 import { updatePassengerName } from '../lib/passengers';
 import { NAME_MAX } from '../types';
-import { captionFor, useSessionCtx } from '../session/context';
+import { useSessionCtx } from '../session/context';
 
-/** M00 이름 입력 (피그마 없음, 새 화면) */
+/** M00 이름 입력 (피그마 없음. 다른 화면의 "현아 님" 표시에 쓰여요) */
 export default function NamePage() {
   const { sid, me, name, setName } = useSessionCtx();
   const navigate = useNavigate();
@@ -33,9 +33,8 @@ export default function NamePage() {
           시작하기
         </Button>
       }
-      caption={captionFor(trimmed)}
     >
-      <PageHeading title="어떻게 불러드릴까요?" sub="운전자와 가족에게 이 이름으로 보여요." />
+      <PageHeading title="어떻게 불러드릴까요?" sub="운전자와 함께 탄 멤버에게 이 이름으로 보여요." />
       <form onSubmit={submit}>
         <input
           className="input"

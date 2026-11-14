@@ -1,4 +1,4 @@
-// docs/firestore-schema.md (v0.3.1) 와 1:1로 맞춘 타입이에요.
+// docs/firestore-schema.md (v0.3.3) 와 1:1로 맞춘 타입이에요.
 // 스키마를 바꿀 때는 문서부터 고치고 이 파일을 따라 고쳐요.
 import type { Timestamp } from 'firebase/firestore';
 
@@ -21,7 +21,7 @@ export const isSeat = (v: unknown): v is Seat =>
 export const TEMP_MIN = 18;
 export const TEMP_MAX = 26;
 export const TEMP_UI_STEP = 1; // 웹 ± 버튼 단위
-export const TEMP_ROUND_STEP = 0.5; // 중앙값 반올림 단위
+export const TEMP_ROUND_STEP = 0.5; // 추천 온도 반올림 단위
 export const NAME_MAX = 10;
 
 export type AirIntake = 'outside' | 'recirc';
@@ -33,8 +33,8 @@ export const AIR_INTAKE_LABEL: Record<AirIntake, string> = {
 export type TempStatus = 'applied' | 'pending' | 'driver_set';
 export const TEMP_STATUS_LABEL: Record<TempStatus, string> = {
   applied: '적용됨',
-  pending: '운전자 적용 대기',
-  driver_set: '운전자가 설정함',
+  pending: '운전자 확인 대기',
+  driver_set: '운전자가 정한 온도 유지',
 };
 
 /* ---------- sessions/{sessionId} ---------- */
@@ -43,8 +43,13 @@ export interface HvacState {
   driverTemp: number;
   passengerTemp: number;
   airIntake: AirIntake;
+  /** 추천 온도 (멀미 가중평균, 차량 앱이 30분마다 계산) */
   medianTemp: number | null;
   voteCount: number;
+  /** 이번 회차 가중치 1위 좌석 (단독일 때만) */
+  leadSeat?: Seat | null;
+  reviewedAt?: Timestamp | null;
+  nextReviewAt?: Timestamp | null;
   tempStatus: TempStatus;
   updatedAt?: Timestamp;
 }
@@ -71,6 +76,8 @@ export interface Session {
   active: boolean;
   tripTitle: string;
   driverName: string;
+  /** 차량 번호 (예: "136가9762"). 없으면 화면에서 생략 */
+  carNumber?: string;
   hvacState?: HvacState;
   route?: RouteInfo;
 }
@@ -99,7 +106,30 @@ export const VISUAL_MODE_LABEL: Record<VisualMode, string> = {
   minimal: '최소 시각 신호',
 };
 
+/** 안내 방식 설명 (나만의 케어) */
+export const VISUAL_MODE_DESC: Record<Exclude<VisualMode, 'off'>, string> = {
+  dot: '양쪽 가장자리의 점이 몸이 쏠리는 방향으로 움직여요',
+  horizon: '양쪽 가장자리의 수평선이 차와 함께 기울어요',
+  minimal: '쏠리는 쪽 가장자리만 은은하게 빛나요',
+};
+
+/** 안내 강도 (visualIntensity 0~100) */
+export const VISUAL_INTENSITIES = [
+  { value: 30, label: '약하게' },
+  { value: 60, label: '보통' },
+  { value: 90, label: '강하게' },
+] as const;
+
 export const REST_INTERVALS = [30, 60, 90] as const;
+
+/** 희망 풍량 (차량 제어 X, 추천 알고리즘 참고용) */
+export type FanPreference = 1 | 2 | 3;
+export const FAN_OPTIONS: { value: FanPreference; label: string }[] = [
+  { value: 1, label: '1단 · 약하게' },
+  { value: 2, label: '2단' },
+  { value: 3, label: '3단' },
+];
+export const FAN_LABEL: Record<FanPreference, string> = { 1: '1단 · 약하게', 2: '2단', 3: '3단' };
 
 export interface Passenger {
   uid: string;
@@ -107,6 +137,9 @@ export interface Passenger {
   sensitivity: Sensitivity | null;
   sicknessTriggers: SicknessTrigger[];
   desiredTemp: number | null;
+  fanPreference: FanPreference | null;
+  /** 직접 바람이 싫으면 true */
+  avoidDirectWind: boolean | null;
   visualMode: VisualMode;
   visualIntensity: number; // 0~100
   restIntervalMin: number | null; // null = 휴식 알림 꺼짐
@@ -120,7 +153,9 @@ export const PASSENGER_DEFAULTS = {
   sensitivity: null,
   sicknessTriggers: [],
   desiredTemp: null,
-  visualMode: 'dot',
+  fanPreference: null,
+  avoidDirectWind: null,
+  visualMode: 'off',
   visualIntensity: 30,
   restIntervalMin: 60,
   submittedAt: null,
@@ -131,12 +166,12 @@ export const PASSENGER_DEFAULTS = {
 export type RequestType = 'REPORT_DISCOMFORT';
 export type RequestStatus = 'pending' | 'done' | 'failed';
 
-export type Discomfort = 'nausea' | 'cold' | 'hot' | 'stuffy' | 'rest';
+export type Discomfort = 'nausea' | 'cold' | 'hot' | 'windy' | 'rest';
 export const DISCOMFORT_OPTIONS: { value: Discomfort; label: string }[] = [
   { value: 'nausea', label: '메스꺼워요' },
   { value: 'cold', label: '너무 추워요' },
   { value: 'hot', label: '너무 더워요' },
-  { value: 'stuffy', label: '답답해요' },
+  { value: 'windy', label: '바람이 너무 세요' },
   { value: 'rest', label: '잠깐 쉬고 싶어요' },
 ];
 
@@ -156,7 +191,7 @@ export interface CareRequest {
 export const clampTemp = (t: number): number =>
   Math.min(TEMP_MAX, Math.max(TEMP_MIN, Math.round(t / TEMP_ROUND_STEP) * TEMP_ROUND_STEP));
 
-/** 희망 온도 중앙값. 희망 온도가 없으면 null (차량 앱 Kotlin 과 같은 규칙) */
+/** (이전 방식) 일반 중앙값. 지금 추천 온도는 차량 앱의 가중평균(TempRecommendation.kt)을 써요 */
 export const medianTemp = (temps: (number | null | undefined)[]): number | null => {
   const v = temps.filter((t): t is number => typeof t === 'number').sort((a, b) => a - b);
   if (v.length === 0) return null;

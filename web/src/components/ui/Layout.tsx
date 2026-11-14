@@ -56,8 +56,8 @@ export function TopBar({
   );
 }
 
-/** 설정 단계 진행 바 (M02~M05: 4칸) */
-export function ProgressBar({ current, total = 4 }: { current: number; total?: number }) {
+/** 처음 설정 진행 바 (좌석 → 멀미 정도 → 실내 취향: 3칸) */
+export function ProgressBar({ current, total = 3 }: { current: number; total?: number }) {
   return (
     <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={current}>
       {Array.from({ length: total }, (_, i) => (
