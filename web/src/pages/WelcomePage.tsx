@@ -1,29 +1,33 @@
 import { useNavigate } from 'react-router-dom';
-import { Armchair, Car, Heart, SlidersHorizontal } from 'lucide-react';
-import { Button, Card, CardTitle, PageHeading, Screen, TopBar } from '../components/ui';
-import { captionFor, useSessionCtx } from '../session/context';
+import { Armchair, Car, Check, Heart, SlidersHorizontal } from 'lucide-react';
+import { Button, Card, CardTitle, PageHeading, Screen, StatusPill, TopBar } from '../components/ui';
+import { honorific, useSessionCtx } from '../session/context';
 
-/** M01 편안타에 참여하기 */
+/** M01 초대 받기 (사진 없음, 연결 상태는 배지 하나로 간략하게) */
 export default function WelcomePage() {
-  const { session, name } = useSessionCtx();
+  const { session } = useSessionCtx();
   const navigate = useNavigate();
+  const driver = session.driverName || '운전자';
 
   return (
     <Screen
-      header={<TopBar step={1} onBack={() => navigate('../name')} />}
+      header={<TopBar onBack={() => navigate('../name')} />}
       action={<Button onClick={() => navigate('../seat')}>내 좌석 선택하기</Button>}
-      caption={captionFor(name)}
     >
-      <PageHeading title="편안타에 참여하기" sub="현재 차량의 탑승자 케어 설정에 참여하세요" />
-
-      <img className="hero-image" src="/images/welcome.png" alt="뒷좌석에서 웃고 있는 아이들 일러스트" />
+      <PageHeading
+        title={`${honorific(driver)}의 초대를 받았어요`}
+        sub={`${session.carNumber ? `${session.carNumber}의 ` : ''}편안타에 참여할게요.`}
+      />
 
       <Card tone="tint">
-        <CardTitle icon={<Car size={22} />}>{session.tripTitle || '함께하는 여정'}</CardTitle>
-        <p className="card-text">
-          {session.driverName ? `${session.driverName}님의 차량에서 초대했어요.` : '차량에서 초대했어요.'}
-        </p>
-        <p className="card-strong">차량 연결 확인됨</p>
+        <div className="row-between">
+          <CardTitle icon={<Car size={22} />}>{session.tripTitle || '함께하는 여정'}</CardTitle>
+          <StatusPill>
+            <Check size={14} strokeWidth={3} />
+            연결됨
+          </StatusPill>
+        </div>
+        <p className="card-text">{driver}님의 차량에서 초대했어요.</p>
       </Card>
 
       <ul className="feature-list">
@@ -33,7 +37,7 @@ export default function WelcomePage() {
         </li>
         <li>
           <SlidersHorizontal size={20} />
-          가족의 취향을 함께 조율해요
+          멤버와 차량 환경을 함께 조율해요
         </li>
         <li>
           <Heart size={20} />

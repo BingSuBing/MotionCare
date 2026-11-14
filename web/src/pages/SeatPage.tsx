@@ -4,17 +4,21 @@ import { Armchair, CircleCheck, CircleX, User } from 'lucide-react';
 import { Button, Chip, PageHeading, ProgressBar, Screen, TopBar } from '../components/ui';
 import { SeatTakenError, claimSeat } from '../lib/passengers';
 import { SEAT_LABEL, type Seat } from '../types';
-import { captionFor, useSessionCtx } from '../session/context';
+import { honorific, useSessionCtx } from '../session/context';
 
 type TileState = 'driver' | 'taken' | 'selected' | 'free';
 
+/**
+ * 좌석 칸: 다른 사람이 앉은 칸은 "그 사람 이름 / 사용 중",
+ * 빈 칸은 "좌석 이름 / 선택 가능", 내가 고른 칸은 "좌석 이름 / 선택됨"
+ */
 function SeatTile({
-  label,
+  title,
   sub,
   state,
   onClick,
 }: {
-  label: string;
+  title: string;
   sub: string;
   state: TileState;
   onClick?: () => void;
@@ -40,13 +44,13 @@ function SeatTile({
       aria-pressed={state === 'selected'}
     >
       <span className="seat__icon">{icon}</span>
-      <span className="seat__label">{label}</span>
+      <span className="seat__label">{title}</span>
       <span className="seat__sub">{sub}</span>
     </button>
   );
 }
 
-/** M02 좌석 선택 */
+/** 처음 설정 1/3: 좌석 선택 */
 export default function SeatPage() {
   const { sid, uid, session, passengers, me, name } = useSessionCtx();
   const navigate = useNavigate();
@@ -58,20 +62,15 @@ export default function SeatPage() {
 
   const tile = (seat: Seat) => {
     const owner = ownerOf(seat);
-    const takenByOther = owner && owner.uid !== uid;
-    // 다른 사람이 방금 가져간 좌석은 선택에서 풀어요
-    const state: TileState = takenByOther ? 'taken' : picked === seat ? 'selected' : 'free';
-    const sub =
-      state === 'taken'
-        ? `${owner?.name || '탑승자'} · 사용 중`
-        : state === 'selected'
-          ? `${name} · 선택됨`
-          : '선택 가능';
+    if (owner && owner.uid !== uid) {
+      return <SeatTile title={owner.name || '탑승자'} sub="사용 중" state="taken" />;
+    }
+    const selected = picked === seat;
     return (
       <SeatTile
-        label={SEAT_LABEL[seat]}
-        sub={sub}
-        state={state}
+        title={SEAT_LABEL[seat]}
+        sub={selected ? '선택됨' : '선택 가능'}
+        state={selected ? 'selected' : 'free'}
         onClick={() => {
           setError(null);
           setPicked(seat);
@@ -102,26 +101,20 @@ export default function SeatPage() {
 
   return (
     <Screen
-      header={<TopBar step={2} onBack={() => navigate('../welcome')} />}
+      header={<TopBar step={1} total={3} onBack={() => navigate('../welcome')} />}
       action={
         <Button onClick={submit} disabled={!picked || saving || pickedIsTaken}>
           {saving ? '등록하는 중…' : '이 좌석으로 계속'}
         </Button>
       }
-      caption={captionFor(name)}
     >
       <ProgressBar current={1} />
-      <PageHeading title="어디에 앉으셨나요?" sub={`${name}님의 좌석을 선택해 주세요.`} />
+      <PageHeading title="어디에 앉으셨나요?" sub={`${honorific(name)}의 좌석을 선택해 주세요.`} />
 
       <div className="seat-map">
-        <p className="seat-map__front">차량 앞쪽 ↑</p>
-        <span className="seat-map__dash" aria-hidden />
+        <span className="seat-map__front-bar">차량 앞쪽</span>
         <div className="seat-map__grid">
-          <SeatTile
-            label="운전석"
-            sub={`${session.driverName || '운전자'} · 사용 중`}
-            state="driver"
-          />
+          <SeatTile title={session.driverName || '운전자'} sub="선택 불가" state="driver" />
           {tile('front_right')}
           {tile('rear_left')}
           {tile('rear_right')}
@@ -129,9 +122,8 @@ export default function SeatPage() {
       </div>
 
       <div className="chips">
-        <Chip selected>선택됨</Chip>
         <Chip>사용 중</Chip>
-        <Chip>선택 가능</Chip>
+        <Chip tone="white">선택 가능</Chip>
       </div>
 
       <div className={`info-box${error ? ' info-box--error' : ''}`} role={error ? 'alert' : undefined}>

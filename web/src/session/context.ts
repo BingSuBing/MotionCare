@@ -24,5 +24,5 @@ export function useSessionCtx(): SessionCtx {
   return ctx;
 }
 
-/** 화면 하단 캡션 */
-export const captionFor = (name: string) => (name ? `편안타 · ${name}의 탑승자 케어` : '편안타 · 탑승자 케어');
+/** "현아 님" (이름이 없으면 "탑승자 님") */
+export const honorific = (name: string) => `${name || '탑승자'} 님`;
