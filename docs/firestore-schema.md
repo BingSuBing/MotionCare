@@ -70,7 +70,7 @@ https://motioncare-fec56.web.app/join?session=<sessionId>
 | `rear_left` | 뒷좌석 왼쪽 |
 | `rear_right` | 뒷좌석 오른쪽 |
 
-- 운전석은 선택할 수 없어요. M02에서는 `driverName`으로 "건호 · 사용 중"이라고 표시만 해요.
+- 운전석은 선택할 수 없어요. M02에서는 `driverName`으로 "도훈 · 사용 중"이라고 표시만 해요.
 - `passengers/{seat}` 문서가 있으면 그 좌석은 **사용 중**이에요.
 
 ### 2.4 시간
