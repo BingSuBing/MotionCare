@@ -81,75 +81,77 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MotionCareTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(modifier = Modifier.padding(innerPadding)) {
-                        if (!started) {
-                            LobbyScreen(
-                                sessionId = sessionId,
-                                joinUrl = joinUrl,
-                                errorText = sessionError,
-                                driverName = SessionManager.DRIVER_NAME,
-                                passengers = passengers,
-                                onRemove = { p -> watcher?.removePassenger(p.seat) },
-                                onStart = { started = true }
-                            )
-                        } else {
-                            CarShell(
-                                tab = tab,
-                                onTab = { tab = it },
-                                cabin = cabin,
-                                airBusy = airBusy,
-                                onToggleAir = { toggleAirIntake() },
-                                onEndTrip = { endTrip() },
-                                overlay = {
-                                    AlertsOverlay(
-                                        requests = pendingRequests,
-                                        passengers = passengers,
-                                        recirc = cabin.recirc,
-                                        airBusy = airBusy,
-                                        onConfirm = { req -> requestSync?.acknowledge(req.id) },
-                                        onFreshAirAndConfirm = { req -> freshAirAndConfirm(req) },
-                                        onFindRest = { req ->
-                                            requestSync?.acknowledge(req.id)
-                                            tab = CarTab.JOURNEY
-                                            findRestStops()
-                                        },
-                                        proposal = proposal,
-                                        showProposal = tab != CarTab.CLIMATE,
-                                        approving = approving,
-                                        onApprove = { approveTemp() },
-                                        onDecline = { tempSync?.decline() }
-                                    )
-                                }
-                            ) {
-                                when (tab) {
-                                    CarTab.HOME -> HomeScreen(naviState, rest)
-                                    CarTab.JOURNEY -> JourneyScreen(
-                                        navi = naviState,
-                                        rest = rest,
-                                        onSearch = { findRestStops() },
-                                        onAdd = { stop -> addRestStop(stop) },
-                                        onOpenNaviSearch = { navi?.openNaviSearch("휴게소") }
-                                    )
-                                    CarTab.PASSENGERS -> PassengersScreen(
-                                        driverName = SessionManager.DRIVER_NAME,
-                                        cabin = cabin,
-                                        passengers = passengers,
-                                        onRename = { p, name -> watcher?.renamePassenger(p.seat, name) },
-                                        onRemove = { p -> watcher?.removePassenger(p.seat) },
-                                        onGoClimate = { tab = CarTab.CLIMATE }
-                                    )
-                                    CarTab.CLIMATE -> ClimateScreen(
-                                        passengers = passengers,
-                                        cabin = cabin,
-                                        proposal = proposal,
-                                        approving = approving,
-                                        airBusy = airBusy,
-                                        onApprove = { approveTemp() },
-                                        onDecline = { tempSync?.decline() },
-                                        onToggleAir = { toggleAirIntake() }
-                                    )
-                                    else -> ComingSoonScreen(tab)
+                CarUiScale {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        Box(modifier = Modifier.padding(innerPadding)) {
+                            if (!started) {
+                                LobbyScreen(
+                                    sessionId = sessionId,
+                                    joinUrl = joinUrl,
+                                    errorText = sessionError,
+                                    driverName = SessionManager.DRIVER_NAME,
+                                    passengers = passengers,
+                                    onRemove = { p -> watcher?.removePassenger(p.seat) },
+                                    onStart = { started = true }
+                                )
+                            } else {
+                                CarShell(
+                                    tab = tab,
+                                    onTab = { tab = it },
+                                    cabin = cabin,
+                                    airBusy = airBusy,
+                                    onToggleAir = { toggleAirIntake() },
+                                    onEndTrip = { endTrip() },
+                                    overlay = {
+                                        AlertsOverlay(
+                                            requests = pendingRequests,
+                                            passengers = passengers,
+                                            recirc = cabin.recirc,
+                                            airBusy = airBusy,
+                                            onConfirm = { req -> requestSync?.acknowledge(req.id) },
+                                            onFreshAirAndConfirm = { req -> freshAirAndConfirm(req) },
+                                            onFindRest = { req ->
+                                                requestSync?.acknowledge(req.id)
+                                                tab = CarTab.JOURNEY
+                                                findRestStops()
+                                            },
+                                            proposal = proposal,
+                                            showProposal = tab != CarTab.CLIMATE,
+                                            approving = approving,
+                                            onApprove = { approveTemp() },
+                                            onDecline = { tempSync?.decline() }
+                                        )
+                                    }
+                                ) {
+                                    when (tab) {
+                                        CarTab.HOME -> HomeScreen(naviState, rest)
+                                        CarTab.JOURNEY -> JourneyScreen(
+                                            navi = naviState,
+                                            rest = rest,
+                                            onSearch = { findRestStops() },
+                                            onAdd = { stop -> addRestStop(stop) },
+                                            onOpenNaviSearch = { navi?.openNaviSearch("휴게소") }
+                                        )
+                                        CarTab.PASSENGERS -> PassengersScreen(
+                                            driverName = SessionManager.DRIVER_NAME,
+                                            cabin = cabin,
+                                            passengers = passengers,
+                                            onRename = { p, name -> watcher?.renamePassenger(p.seat, name) },
+                                            onRemove = { p -> watcher?.removePassenger(p.seat) },
+                                            onGoClimate = { tab = CarTab.CLIMATE }
+                                        )
+                                        CarTab.CLIMATE -> ClimateScreen(
+                                            passengers = passengers,
+                                            cabin = cabin,
+                                            proposal = proposal,
+                                            approving = approving,
+                                            airBusy = airBusy,
+                                            onApprove = { approveTemp() },
+                                            onDecline = { tempSync?.decline() },
+                                            onToggleAir = { toggleAirIntake() }
+                                        )
+                                        else -> ComingSoonScreen(tab)
+                                    }
                                 }
                             }
                         }

@@ -130,7 +130,7 @@ class SessionManager(private val hvac: HvacController) {
         private const val TAG = "MotionCare"
         private const val DEFAULT_TEMP = 22.0
         const val TRIP_TITLE = "우리 가족 · 서울 → 강릉"
-        const val DRIVER_NAME = "건호"
+        const val DRIVER_NAME = "도훈"
         private const val JOIN_BASE = "https://motioncare-fec56.web.app/join?session="
 
         fun joinUrl(sid: String) = JOIN_BASE + sid
