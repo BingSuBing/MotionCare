@@ -17,7 +17,7 @@ val devSessionId: String = localProps.getProperty("devSessionId")?.trim().orEmpt
 // 카카오 로컬 REST API 키: local.properties (커밋 안 됨)
 // - debug: kakaoRestKey
 // - release(공개 APK): kakaoRestKeyRelease. 비워 두면 키 없이 빌드돼요(휴식처 검색은 최근 결과·내비 검색으로 대신).
-//   공개 APK에 넣을 키는 개발용과 따로 발급하고, 카카오 콘솔에서 허용 IP·사용량을 제한해 주세요.
+//   공개 APK에 넣을 키는 제출 전용 카카오 앱을 따로 만들어 쓰고 심사 후 재발급해요. (허용 IP는 걸지 않아요: 심사 환경에서 막혀요)
 val kakaoRestKey: String = localProps.getProperty("kakaoRestKey")?.trim().orEmpty()
 val kakaoRestKeyRelease: String = localProps.getProperty("kakaoRestKeyRelease")?.trim().orEmpty()
 
