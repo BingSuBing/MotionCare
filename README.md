@@ -58,7 +58,7 @@ sessions/{sessionId}            ← 차량 앱이 생성 (carUid, tripTitle, dri
 | Pleos SDK | Vehicle (`ai.pleos.playground:Vehicle:2.3.2`, HVAC 온도·외기/내기·전원), NaviHelper·TTS *(예정)* |
 | 동승자 웹 | React 19, TypeScript, Vite, React Router, lucide-react |
 | 백엔드 | Firebase Firestore, Anonymous Auth, Hosting |
-| 기타 | ZXing (QR 생성, 예정), 카카오 로컬 API (휴게소 검색, 예정) |
+| 기타 | ZXing (QR 생성, 예정), 카카오 로컬 API (휴게소 검색), Pleos NaviHelper (경로·경유지), MapLibre + OpenFreeMap (지도) |
 
 ## 개발 환경
 
@@ -79,6 +79,8 @@ sessions/{sessionId}            ← 차량 앱이 생성 (carUid, tripTitle, dri
    ```
 3. `app` 모듈을 실행하면 세션(debug 빌드는 `test01`)이 만들어지고 QR 주소가 화면에 표시돼요.
    - 혼자 테스트할 땐 `local.properties`에 `devSessionId=subin01`처럼 개인 세션 ID를 적어요. 시작할 때 그 세션의 예전 `passengers`, `requests`를 자동으로 비워요.
+   - 휴식처 검색에는 카카오 REST API 키가 필요해요. `local.properties`에 `kakaoRestKey=…`(debug용)를 적어요. 키가 없어도 빌드는 되고, 휴식처 검색만 최근 결과나 내비 검색으로 대신해요.
+   - release 빌드(공개 APK)는 `kakaoRestKeyRelease`만 써요. 공개 APK의 키는 누구나 꺼낼 수 있으니, 개발용과 다른 키를 발급하고 카카오 콘솔에서 허용 IP·사용량을 제한한 뒤 넣어요. 제출 후에는 재발급해요.
    - release 빌드(제출용 APK)는 실행할 때마다 무작위 6자리 세션 ID를 만들어요.
 
 > 온도가 안 바뀌면: 하단 바가 꺼짐이면 공조 전원이 꺼진 상태예요. 앱도 하단 바도 반응이 없으면 에뮬레이터를 Cold Boot 해요.

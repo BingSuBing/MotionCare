@@ -56,6 +56,20 @@ class MainActivity : ComponentActivity() {
         // 1-1) 내비 연결 (현재 위치, 경로, 경유지)
         val n = NaviController(this)
         n.onState = { state -> naviState = state }
+        // 내비가 받아들인 뒤에만 웹에 휴식처를 알려요
+        n.onRestStopConfirmed = { stop, etaMin ->
+            rest = rest.copy(addedId = stop.id, addingId = null)
+            writeNextRestStop(stop, etaMin ?: estimateEtaMin(stop))
+        }
+        n.onRestStopEta = { stop, etaMin -> writeNextRestStop(stop, etaMin) }
+        n.onRestStopFailed = { _, reason ->
+            rest = rest.copy(addingId = null)
+            Toast.makeText(this, "경유지 추가에 실패했어요 ($reason)", Toast.LENGTH_SHORT).show()
+        }
+        n.onRestStopCleared = {
+            rest = rest.copy(addedId = null)
+            watcher?.clearNextRestStop()
+        }
         n.connect()
         navi = n
 
@@ -309,15 +323,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // [경유지로 추가]: 내비에 경유지 요청 → 웹 표시용으로 route.nextRestStop 기록
+    // [경유지로 추가]: 내비에 요청만 보내요. 내비가 받아들이면(onRestStopConfirmed) route.nextRestStop 기록
     private fun addRestStop(stop: RestStop) {
         val sent = navi?.addRestStop(stop) ?: false
-        if (!sent) return
-        rest = rest.copy(addedId = stop.id)
+        if (sent) rest = rest.copy(addingId = stop.id)
+    }
+
+    private fun writeNextRestStop(stop: RestStop, etaMin: Int) {
         val km = stop.distanceM / 1000.0
-        // 도착 예상: 경로가 정해지기 전이라 평균 80km/h로 어림 (내비 정보가 오면 그쪽이 정확해요)
-        val etaMin = maxOf(1, (km / 80.0 * 60).toInt())
         watcher?.writeNextRestStop(stop.name, Math.round(km * 10) / 10.0, etaMin)
+    }
+
+    // 경유지로 넣은 경우 내비가 경유지별 남은 시간을 주지 않아서 어림해요:
+    // 직선거리 × 도로 우회 1.3 ÷ 평균 70km/h (바로 안내한 경우는 내비 남은 시간으로 다시 기록돼요)
+    private fun estimateEtaMin(stop: RestStop): Int {
+        val roadKm = stop.distanceM / 1000.0 * ROAD_DETOUR
+        return maxOf(1, Math.ceil(roadKm / AVG_SPEED_KMH * 60).toInt())
     }
 
     override fun onDestroy() {
@@ -332,5 +353,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MotionCare"
+        private const val ROAD_DETOUR = 1.3
+        private const val AVG_SPEED_KMH = 70.0
     }
 }

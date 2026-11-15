@@ -58,6 +58,51 @@ class NaviController(context: Context) {
     // 상태가 바뀔 때마다 호출 (메인 스레드)
     var onState: ((NaviState) -> Unit)? = null
 
+    // 휴식처 경유지 처리 결과 (모두 메인 스레드)
+    // - confirmed: 내비가 경유지 변경/경로 시작으로 받아들였을 때. etaMin은 모르면 null
+    // - eta: 바로 안내한 경우 내비의 남은 시간이 오면 다시 알려줘요
+    // - failed: 내비 오류이거나 응답이 없을 때
+    // - cleared: 휴식처에 도착했거나 경로가 취소됐을 때
+    var onRestStopConfirmed: ((RestStop, Int?) -> Unit)? = null
+    var onRestStopEta: ((RestStop, Int) -> Unit)? = null
+    var onRestStopFailed: ((RestStop, String) -> Unit)? = null
+    var onRestStopCleared: (() -> Unit)? = null
+
+    // 내비 응답을 기다리는 휴식처 (direct = 경로가 없어서 바로 안내)
+    private var pendingRest: RestStop? = null
+    private var pendingDirect = false
+    // 내비가 받아들인 휴식처 (도착·취소 때 지우려고)
+    private var activeRest: RestStop? = null
+    // 바로 안내한 휴식처: 목적지 정보(남은 시간)가 오면 ETA를 알려줘요
+    private var etaTarget: RestStop? = null
+
+    private val restTimeout = Runnable {
+        pendingRest?.let { failRest(it, "내비 응답이 없어요") }
+    }
+
+    private fun confirmRest() {
+        val stop = pendingRest ?: return
+        main.removeCallbacks(restTimeout)
+        pendingRest = null
+        activeRest = stop
+        etaTarget = if (pendingDirect) stop else null
+        onRestStopConfirmed?.invoke(stop, null)
+    }
+
+    private fun failRest(stop: RestStop, reason: String) {
+        main.removeCallbacks(restTimeout)
+        pendingRest = null
+        update { it.copy(message = "${stop.name} 추가에 실패했어요: $reason") }
+        onRestStopFailed?.invoke(stop, reason)
+    }
+
+    private fun clearRest() {
+        if (activeRest == null) return
+        activeRest = null
+        etaTarget = null
+        onRestStopCleared?.invoke()
+    }
+
     private fun update(block: (NaviState) -> NaviState) {
         main.post {
             state = block(state)
@@ -68,6 +113,8 @@ class NaviController(context: Context) {
     private val listener = object : NaviHelperEventListener {
         override fun onRouteStarted(routeStartInfo: RouteStartInfo) {
             update { it.copy(guiding = true) }
+            // 내비가 새 경로(휴식처로 바로 안내 또는 경유지 반영)를 시작함
+            main.post { if (pendingRest != null) confirmRest() }
             refresh()
         }
 
@@ -77,9 +124,14 @@ class NaviController(context: Context) {
         @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
         override fun onRouteEnded() = refresh()
 
-        override fun onReRouteEnded() = refresh()
+        // 경유지를 넣으면 재탐색으로 끝나는 경우도 있어요
+        override fun onReRouteEnded() {
+            main.post { if (pendingRest != null) confirmRest() }
+            refresh()
+        }
 
         override fun onRouteCancelled() {
+            main.post { clearRest() }
             update {
                 it.copy(guiding = false, destinationName = null, remainDistanceM = null,
                     remainTimeS = null, waypoints = emptyList())
@@ -90,18 +142,31 @@ class NaviController(context: Context) {
 
         override fun onWaypointChanged(waypointChangedInfo: WaypointChangedInfo) {
             update { it.copy(message = "경유지가 바뀌었어요") }
+            main.post { if (pendingRest != null) confirmRest() }
             refresh()
         }
 
         override fun onWayPointArrived(waypointArrivedInfo: WaypointArrivedInfo) {
             update { it.copy(message = "${waypointArrivedInfo.name}에 도착했어요") }
+            main.post { clearRest() }
         }
 
         override fun onDestinationArrived(destinationArrivedInfo: DestinationArrivedInfo) {
             update { it.copy(guiding = false, message = "${destinationArrivedInfo.name}에 도착했어요") }
+            main.post { clearRest() }
         }
 
         override fun onDestinationInfo(destinationInfo: DestinationInfo) {
+            // 바로 안내한 휴식처면 내비의 남은 시간으로 ETA 갱신
+            @Suppress("USELESS_ELVIS")
+            val remainS: Int = destinationInfo.remainTime ?: 0
+            main.post {
+                val target = etaTarget
+                if (target != null && remainS > 0) {
+                    etaTarget = null
+                    onRestStopEta?.invoke(target, maxOf(1, (remainS + 59) / 60))
+                }
+            }
             update {
                 it.copy(
                     destinationName = destinationInfo.name?.takeIf { n -> n.isNotBlank() },
@@ -136,6 +201,7 @@ class NaviController(context: Context) {
         override fun onError(errorCode: NaviErrorCode) {
             Log.w(TAG, "내비 오류: $errorCode")
             update { it.copy(message = "내비 오류: ${errorCode.name}") }
+            main.post { pendingRest?.let { failRest(it, "내비 오류 ${errorCode.name}") } }
         }
 
         // 아래는 지금 쓰지 않는 콜백 (SDK 3.0.5 인터페이스를 채우려고 둬요)
@@ -169,6 +235,8 @@ class NaviController(context: Context) {
                     connected = true
                     update { it.copy(connected = true, message = null) }
                     refresh()
+                    // 다시 연결돼도 위치 조회가 겹치지 않게
+                    main.removeCallbacks(poll)
                     main.post(poll)
                 },
                 onFailed = { t ->
@@ -193,13 +261,20 @@ class NaviController(context: Context) {
     }
 
     // 휴식처를 경유지로: 안내 중이면 첫 번째 경유지로 추가, 아니면 그곳으로 바로 경로 안내
+    // true = 내비에 요청을 보냄. 실제 반영 여부는 onRestStopConfirmed / onRestStopFailed로 와요
     fun addRestStop(stop: RestStop): Boolean {
         if (!connected) {
             update { it.copy(message = "내비에 연결되지 않았어요") }
             return false
         }
+        if (pendingRest != null) return false
+        val direct = !state.guiding
+        pendingRest = stop
+        pendingDirect = direct
+        main.removeCallbacks(restTimeout)
+        main.postDelayed(restTimeout, REST_CONFIRM_TIMEOUT_MS)
         return try {
-            if (state.guiding) {
+            if (!direct) {
                 helper.addWaypoint(
                     RequestWaypointInfo(
                         latitude = stop.lat,
@@ -211,7 +286,7 @@ class NaviController(context: Context) {
                         poiSubId = "0"
                     )
                 )
-                update { it.copy(message = "${stop.name}을(를) 경유지로 추가했어요") }
+                update { it.copy(message = "${stop.name}을(를) 경유지로 추가하는 중...") }
             } else {
                 helper.requestRoute(
                     RouteInfo(
@@ -226,11 +301,13 @@ class NaviController(context: Context) {
                         routeOption = RouteOption.RECOMMENDED
                     )
                 )
-                update { it.copy(message = "안내 중인 경로가 없어서 ${stop.name}(으)로 바로 안내해요") }
+                update { it.copy(message = "안내 중인 경로가 없어서 ${stop.name}(으)로 바로 안내를 요청했어요") }
             }
             true
         } catch (t: Throwable) {
             Log.e(TAG, "경유지 추가 실패", t)
+            main.removeCallbacks(restTimeout)
+            pendingRest = null
             update { it.copy(message = "경유지 추가에 실패했어요: ${t.message}") }
             false
         }
@@ -245,6 +322,7 @@ class NaviController(context: Context) {
 
     fun release() {
         main.removeCallbacks(poll)
+        main.removeCallbacks(restTimeout)
         runCatching { helper.removeListener(listener) }
         runCatching { helper.release() }
         connected = false
@@ -253,5 +331,6 @@ class NaviController(context: Context) {
     companion object {
         private const val TAG = "MotionCare"
         private const val POLL_MS = 10_000L
+        private const val REST_CONFIRM_TIMEOUT_MS = 15_000L
     }
 }

@@ -942,13 +942,22 @@ private fun LobbyPreview() {
 @Composable
 private fun HomePreview() {
     CarShell(
-        tab = CarTab.PASSENGERS,
+        tab = CarTab.HOME,
         onTab = {},
         cabin = CabinState(driverTemp = 22.0, recirc = true, targetTemp = 23.0),
         airBusy = false,
         onToggleAir = {},
         onEndTrip = {}
     ) {
-        ComingSoonScreen(CarTab.PASSENGERS)
+        HomeScreen(
+            navi = NaviState(
+                connected = true,
+                guiding = true,
+                destinationName = "강릉역",
+                remainDistanceM = 86_000,
+                remainTimeS = 4_320
+            ),
+            rest = RestUiState()
+        )
     }
 }

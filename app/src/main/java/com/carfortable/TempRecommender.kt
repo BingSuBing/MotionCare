@@ -147,6 +147,14 @@ class TempRecommender(
                 data["hvacState.tempStatus"] =
                     if (rec.shouldPropose) TempStatus.PENDING else TempStatus.APPLIED
                 data["hvacState.updatedAt"] = FieldValue.serverTimestamp()
+            } else {
+                // 희망 온도가 하나도 없으면(모두 나감 등) 예전 제안을 지워요
+                // (pending이 남으면 운전자 화면에 떠난 탑승자의 추천 온도가 계속 보여요)
+                data["hvacState.medianTemp"] = null
+                data["hvacState.voteCount"] = 0
+                data["hvacState.leadSeat"] = null
+                data["hvacState.tempStatus"] = TempStatus.APPLIED
+                data["hvacState.updatedAt"] = FieldValue.serverTimestamp()
             }
             db.document(Paths.session(sessionId)).update(data)
                 .addOnFailureListener { e -> Log.e(TAG, "추천 온도 기록 실패", e) }

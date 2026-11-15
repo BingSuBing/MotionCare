@@ -34,7 +34,8 @@ import java.util.Locale
 data class RestUiState(
     val searching: Boolean = false,
     val result: RestSearchResult? = null,
-    val addedId: String? = null
+    val addedId: String? = null,
+    val addingId: String? = null   // 내비 응답을 기다리는 휴식처
 )
 
 // 지도에 찍을 점: 현재 위치 + 휴식처 후보(번호)
@@ -199,6 +200,8 @@ fun JourneyScreen(
                         number = i + 1,
                         stop = s,
                         added = rest.addedId == s.id,
+                        adding = rest.addingId == s.id,
+                        enabled = rest.addingId == null,
                         onAdd = { onAdd(s) }
                     )
                 }
@@ -228,7 +231,14 @@ private fun EmptyCard(text: String) {
 }
 
 @Composable
-private fun RestStopCard(number: Int, stop: RestStop, added: Boolean, onAdd: () -> Unit) {
+private fun RestStopCard(
+    number: Int,
+    stop: RestStop,
+    added: Boolean,
+    adding: Boolean,
+    enabled: Boolean,
+    onAdd: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -256,9 +266,12 @@ private fun RestStopCard(number: Int, stop: RestStop, added: Boolean, onAdd: () 
         Spacer(Modifier.width(10.dp))
         if (added) {
             Text("✓ 추가됨", color = CarColors.Green, fontWeight = FontWeight.Bold)
+        } else if (adding) {
+            Text("내비 확인 중...", color = CarColors.SubText, fontWeight = FontWeight.SemiBold)
         } else {
             Button(
                 onClick = onAdd,
+                enabled = enabled,
                 colors = ButtonDefaults.buttonColors(containerColor = CarColors.Green),
                 shape = RoundedCornerShape(10.dp)
             ) {

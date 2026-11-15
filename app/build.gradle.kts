@@ -14,8 +14,12 @@ val localProps = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 val devSessionId: String = localProps.getProperty("devSessionId")?.trim().orEmpty()
-// 카카오 로컬 REST API 키: local.properties의 kakaoRestKey (커밋 안 됨)
+// 카카오 로컬 REST API 키: local.properties (커밋 안 됨)
+// - debug: kakaoRestKey
+// - release(공개 APK): kakaoRestKeyRelease. 비워 두면 키 없이 빌드돼요(휴식처 검색은 최근 결과·내비 검색으로 대신).
+//   공개 APK에 넣을 키는 개발용과 따로 발급하고, 카카오 콘솔에서 허용 IP·사용량을 제한해 주세요.
 val kakaoRestKey: String = localProps.getProperty("kakaoRestKey")?.trim().orEmpty()
+val kakaoRestKeyRelease: String = localProps.getProperty("kakaoRestKeyRelease")?.trim().orEmpty()
 
 android {
     namespace = "com.carfortable"
@@ -29,16 +33,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "KAKAO_REST_KEY", "\"$kakaoRestKey\"")
     }
 
     buildTypes {
         debug {
             buildConfigField("String", "DEV_SESSION_ID", "\"$devSessionId\"")
+            buildConfigField("String", "KAKAO_REST_KEY", "\"$kakaoRestKey\"")
         }
         release {
             // 제출용 APK는 실행할 때마다 새 세션 ID
             buildConfigField("String", "DEV_SESSION_ID", "\"\"")
+            buildConfigField("String", "KAKAO_REST_KEY", "\"$kakaoRestKeyRelease\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
