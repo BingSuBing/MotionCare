@@ -60,12 +60,15 @@ export interface RestStop {
   etaMin: number;
 }
 
-/** 2단계 */
+/**
+ * 2단계. 차량 앱은 지금 nextRestStop만 써요(경유지로 추가할 때 기록, 도착·취소하면 null).
+ * 나머지 경로 값은 나중에 채울 수 있어서 선택 값이에요.
+ */
 export interface RouteInfo {
-  destinationName: string;
-  eta: Timestamp;
-  remainingMin: number;
-  nextRestStop: RestStop | null;
+  destinationName?: string;
+  eta?: Timestamp;
+  remainingMin?: number;
+  nextRestStop?: RestStop | null;
   updatedAt?: Timestamp;
 }
 

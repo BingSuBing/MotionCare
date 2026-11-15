@@ -9,8 +9,15 @@ import { honorific, useSessionCtx } from '../session/context';
 
 type Step = { icon: ReactNode; title: string; desc: string };
 
+/** 휴식 장소 안내 문구: 이번 요청 뒤에 정해진 휴식처 → 운전자가 찾는 중 → 기본 */
+function restDesc(value: Discomfort, done: boolean, restStop: string | null): string {
+  if (restStop) return restStop;
+  if (value === 'rest' && done) return '운전자가 가까운 휴식처를 찾고 있어요.';
+  return '경로 정보를 확인하고 있어요.';
+}
+
 /** 불편 종류별로 차량에서 일어날 일 (스키마 6.1) */
-function stepsFor(value: Discomfort, driverName: string, restStop: string | null): Step[] {
+function stepsFor(value: Discomfort, driverName: string, rest: string): Step[] {
   const steps: Step[] = [
     {
       icon: <Check size={20} />,
@@ -28,7 +35,7 @@ function stepsFor(value: Discomfort, driverName: string, restStop: string | null
     steps.push({
       icon: <Coffee size={20} />,
       title: '가까운 휴식 장소 추천',
-      desc: restStop ?? '경로 정보를 확인하고 있어요.',
+      desc: rest,
     });
   return steps;
 }
@@ -57,8 +64,12 @@ export default function SentPage() {
 
   const label = DISCOMFORT_OPTIONS.find((o) => o.value === request.value)?.label ?? request.value;
   const sentAt = request.createdAt?.toDate?.() ?? new Date();
+  // 이번 요청을 보낸 뒤에 기록된 휴식처만 보여줘요 (지난 휴식 때 기록이 남아 있을 수 있어서)
   const stop = session.route?.nextRestStop;
-  const restStop = stop ? `${stop.name} · 약 ${stop.etaMin}분 거리` : null;
+  const stopAt = session.route?.updatedAt?.toMillis?.() ?? 0;
+  const freshStop = stop && stopAt >= sentAt.getTime() ? stop : null;
+  const restStop = freshStop ? `${freshStop.name} · 약 ${freshStop.etaMin}분 거리` : null;
+  const rest = restDesc(request.value, request.status === 'done', restStop);
 
   return (
     <Screen header={<TopBar />} action={back}>
@@ -83,7 +94,7 @@ export default function SentPage() {
       <Card>
         <CardTitle>이제 이렇게 도와드려요</CardTitle>
         <ul className="steps">
-          {stepsFor(request.value, session.driverName, restStop).map((s) => (
+          {stepsFor(request.value, session.driverName, rest).map((s) => (
             <li key={s.title} className="steps__item">
               <span className="steps__icon">{s.icon}</span>
               <div>
