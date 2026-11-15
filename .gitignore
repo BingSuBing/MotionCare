@@ -1,34 +1,28 @@
+# Android / Gradle
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-
-# Gradle / Build
 .gradle/
 build/
-*/build/
 captures/
 .externalNativeBuild/
 .cxx/
-
-# Android Studio
+local.properties
 .idea/
 
-# 로컬 설정, 키 (절대 올리면 안 됨)
+# key
 *.keystore
 *.jks
 secrets.properties
 
-# 로그
+# Web (Vite)
+node_modules/
+web/dist/
+.env.local
+*.local
+
+# Firebase
+.firebase/
+
+# OS / log
+.DS_Store
+Thumbs.db
 *.log
