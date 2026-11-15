@@ -1,5 +1,6 @@
 package com.carfortable
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,7 +19,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -28,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +44,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.carfortable.shared.Discomfort
@@ -49,6 +58,56 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// 차량 화면 전체 배율: 앱이 쓸 수 있는 폭에 맞춰 글씨·여백·버튼을 같이 키워요 (1.0~1.6배)
+// 화면이 넓을수록 크게, 좁은 화면에서는 원래 크기 그대로예요
+@Composable
+fun CarUiScale(content: @Composable () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val base = LocalDensity.current
+        val scale = (maxWidth.value / UI_BASE_WIDTH_DP).coerceIn(1f, UI_MAX_SCALE)
+        CompositionLocalProvider(
+            LocalDensity provides Density(base.density * scale, base.fontScale)
+        ) {
+            content()
+        }
+    }
+}
+
+private const val UI_BASE_WIDTH_DP = 1100f
+private const val UI_MAX_SCALE = 1.6f
+
+// 편안타 로고: 해(반원) + 수평선 두 줄. 원본 1024px 로고의 비율 그대로 그려요 (가로 616 : 세로 452)
+@Composable
+fun PyeonantaLogo(height: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(width = height * (LOGO_W / LOGO_H), height = height)) {
+        val s = size.width / LOGO_W
+        fun x(v: Float) = (v - LOGO_LEFT) * s
+        fun y(v: Float) = (v - LOGO_TOP) * s
+        // 해: 지름 400 원의 위쪽 반
+        drawArc(
+            color = CarColors.LogoSun,
+            startAngle = 180f, sweepAngle = 180f, useCenter = true,
+            topLeft = Offset(x(312f), y(284f)), size = Size(400f * s, 400f * s)
+        )
+        // 긴 수평선, 짧은 수평선
+        drawRoundRect(
+            color = CarColors.LogoLine,
+            topLeft = Offset(x(204f), y(536f)), size = Size(616f * s, 72f * s),
+            cornerRadius = CornerRadius(36f * s)
+        )
+        drawRoundRect(
+            color = CarColors.LogoLine,
+            topLeft = Offset(x(316f), y(664f)), size = Size(392f * s, 72f * s),
+            cornerRadius = CornerRadius(36f * s)
+        )
+    }
+}
+
+private const val LOGO_W = 616f
+private const val LOGO_H = 452f
+private const val LOGO_LEFT = 204f
+private const val LOGO_TOP = 284f
 
 // 피그마 색상
 object CarColors {
@@ -60,6 +119,8 @@ object CarColors {
     val SubText = Color(0xFF777777)
     val MapGray = Color(0xFFDADADA)
     val Alert = Color(0xFFFCF0E3)
+    val LogoSun = Color(0xFF00491E)
+    val LogoLine = Color(0xFF283B30)
 }
 
 enum class CarTab(val label: String, val symbol: String) {
@@ -91,7 +152,8 @@ fun LobbyScreen(
     ) {
         // 왼쪽: 브랜드
         Column(modifier = Modifier.weight(0.8f)) {
-            Text("🌱", fontSize = 32.sp)
+            PyeonantaLogo(height = 44.dp)
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("편안타", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = CarColors.Green)
                 Spacer(Modifier.width(10.dp))
@@ -259,9 +321,9 @@ private fun PassengerRow(p: PassengerItem, onRemoveClick: () -> Unit) {
         }
         Spacer(Modifier.width(10.dp))
         Text(p.name, fontWeight = FontWeight.Bold, color = CarColors.Text)
-        Text(" · ${Seat.label(p.seat)}", fontSize = 13.sp, color = CarColors.SubText)
+        Text(" · ${Seat.label(p.seat)}", fontSize = 15.sp, color = CarColors.SubText)
         Spacer(Modifier.weight(1f))
-        Text(if (p.submitted) "✓" else "입력 중", fontSize = 13.sp,
+        Text(if (p.submitted) "✓" else "입력 중", fontSize = 15.sp,
             color = if (p.submitted) CarColors.Green else CarColors.SubText)
     }
 }
@@ -287,9 +349,11 @@ fun CarShell(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("🌱 편안타", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CarColors.Green)
+            PyeonantaLogo(height = 22.dp)
             Spacer(Modifier.width(8.dp))
-            Text("PYEONANTA", fontSize = 11.sp, color = CarColors.SubText)
+            Text("편안타", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CarColors.Green)
+            Spacer(Modifier.width(8.dp))
+            Text("PYEONANTA", fontSize = 13.sp, color = CarColors.SubText)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { confirmEnd = true }) {
                 Text("여정 종료", color = CarColors.SubText, fontSize = 14.sp)
@@ -331,7 +395,7 @@ fun CarShell(
             Spacer(Modifier.width(16.dp))
             Text(
                 cabin.targetTemp?.let { "추천 온도 ${formatTemp(it)}°" } ?: "추천 온도 대기 중",
-                fontSize = 13.sp, color = CarColors.SubText
+                fontSize = 15.sp, color = CarColors.SubText
             )
         }
     }
@@ -371,7 +435,7 @@ private fun NavItem(tab: CarTab, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(tab.symbol, fontSize = 20.sp, color = CarColors.Green)
         Spacer(Modifier.height(4.dp))
-        Text(tab.label, fontSize = 12.sp, color = CarColors.Text)
+        Text(tab.label, fontSize = 14.sp, color = CarColors.Text)
     }
 }
 
@@ -529,7 +593,7 @@ private fun AlertBanner(
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
-            Text(subtitle, fontSize = 13.sp, color = CarColors.SubText)
+            Text(subtitle, fontSize = 15.sp, color = CarColors.SubText)
         }
         Spacer(Modifier.width(12.dp))
         actions()
@@ -567,25 +631,31 @@ fun PassengersScreen(
             fontWeight = FontWeight.Bold, color = CarColors.Text)
         Spacer(Modifier.height(16.dp))
 
+        // 카드 4칸(운전자 + 좌석 3개)을 화면 폭에 맞춰 나눠요. 빈 좌석 칸은 비워 둬서 카드 크기가 일정해요
         Row(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            DriverCard(driverName, cabin)
-            passengers.forEach { p ->
+            DriverCard(driverName, cabin, Modifier.weight(1f))
+            passengers.take(3).forEach { p ->
                 PassengerCard(
                     p = p,
                     onRename = { renameTarget = p },
-                    onRemove = { removeTarget = p }
+                    onRemove = { removeTarget = p },
+                    modifier = Modifier.weight(1f)
                 )
+            }
+            // 빈 좌석 칸 (탑승자가 없으면 안내 카드가 한 칸을 써요)
+            val emptySlots = (3 - passengers.size).coerceAtLeast(0) - (if (passengers.isEmpty()) 1 else 0)
+            repeat(emptySlots) {
+                Spacer(Modifier.weight(1f))
             }
             if (passengers.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .width(240.dp)
+                        .weight(1f)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(20.dp))
                         .background(CarColors.Card),
@@ -609,7 +679,7 @@ fun PassengersScreen(
                 Text("휴대폰에서는 내 취향만, 차량에서는 함께 조율해요.",
                     fontWeight = FontWeight.Bold, color = CarColors.Text)
                 Text("운전자만 공조와 경유지를 최종 적용할 수 있어요.",
-                    fontSize = 13.sp, color = CarColors.SubText)
+                    fontSize = 15.sp, color = CarColors.SubText)
             }
             GreenButton(text = "실내 취향 조율하기 →", onClick = onGoClimate)
         }
@@ -638,8 +708,9 @@ fun PassengersScreen(
 }
 
 @Composable
-private fun DriverCard(driverName: String, cabin: CabinState) {
+private fun DriverCard(driverName: String, cabin: CabinState, modifier: Modifier) {
     InfoCard(
+        modifier = modifier,
         symbol = "🚗",
         name = driverName,
         seat = "운전석",
@@ -651,8 +722,14 @@ private fun DriverCard(driverName: String, cabin: CabinState) {
 }
 
 @Composable
-private fun PassengerCard(p: PassengerItem, onRename: () -> Unit, onRemove: () -> Unit) {
+private fun PassengerCard(
+    p: PassengerItem,
+    onRename: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier
+) {
     InfoCard(
+        modifier = modifier,
         symbol = "☺",
         name = p.name,
         seat = Seat.label(p.seat),
@@ -682,6 +759,7 @@ private fun windText(p: PassengerItem): String {
 
 @Composable
 private fun InfoCard(
+    modifier: Modifier,
     symbol: String,
     name: String,
     seat: String,
@@ -691,8 +769,7 @@ private fun InfoCard(
     actions: @Composable () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .width(240.dp)
+        modifier = modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(20.dp))
             .background(CarColors.Card)
@@ -701,13 +778,13 @@ private fun InfoCard(
         Text(symbol, fontSize = 24.sp, color = CarColors.Green)
         Spacer(Modifier.height(10.dp))
         Text(name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
-        Text(seat, fontSize = 13.sp, color = CarColors.SubText)
+        Text(seat, fontSize = 15.sp, color = CarColors.SubText)
         Spacer(Modifier.height(10.dp))
         Pill(text = chip)
         Spacer(Modifier.height(14.dp))
         Text(temp, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
         Spacer(Modifier.height(10.dp))
-        lines.forEach { Text(it, fontSize = 13.sp, color = CarColors.SubText) }
+        lines.forEach { Text(it, fontSize = 15.sp, color = CarColors.SubText) }
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) { actions() }
     }
@@ -771,7 +848,9 @@ fun ClimateScreen(
         ) {
             // 왼쪽: 탑승자별 희망 온도
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("탑승자별 희망 설정", fontWeight = FontWeight.SemiBold, color = CarColors.Text)
@@ -816,7 +895,7 @@ fun ClimateScreen(
                                 false -> "외기 유입 중"
                                 null -> "상태 확인 중"
                             },
-                            fontSize = 13.sp, color = CarColors.SubText
+                            fontSize = 15.sp, color = CarColors.SubText
                         )
                     }
                     GreenButton(
@@ -856,7 +935,7 @@ private fun DesireRow(p: PassengerItem) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text("${p.name} · ${Seat.label(p.seat)}", fontWeight = FontWeight.Bold, color = CarColors.Text)
-            Text("멀미 민감도 ${sensitivityLabel(p.sensitivity)}", fontSize = 13.sp, color = CarColors.SubText)
+            Text("멀미 민감도 ${sensitivityLabel(p.sensitivity)}", fontSize = 15.sp, color = CarColors.SubText)
         }
         Text(
             p.desiredTemp?.let { "${formatTemp(it)}°" } ?: "미입력",
@@ -880,7 +959,7 @@ private fun TempCard(title: String, temp: Double?, caption: String, modifier: Mo
         Text(temp?.let { "${formatTemp(it)}℃" } ?: "--", fontSize = 34.sp,
             fontWeight = FontWeight.Bold, color = CarColors.Text)
         Spacer(Modifier.height(4.dp))
-        Text(caption, fontSize = 12.sp, color = CarColors.SubText)
+        Text(caption, fontSize = 14.sp, color = CarColors.SubText)
     }
 }
 
@@ -914,7 +993,7 @@ private fun Pill(text: String) {
             .background(CarColors.GreenLight)
             .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
-        Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = CarColors.Green)
+        Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = CarColors.Green)
     }
 }
 
@@ -927,7 +1006,7 @@ private fun LobbyPreview() {
         sessionId = "test02",
         joinUrl = "https://motioncare-fec56.web.app/join?session=test02",
         errorText = null,
-        driverName = "건호",
+        driverName = "도훈",
         passengers = listOf(
             PassengerItem("front_right", "윤지", true),
             PassengerItem("rear_left", "현아", true),

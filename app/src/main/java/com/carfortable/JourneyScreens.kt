@@ -78,10 +78,10 @@ private fun RouteSummaryChip(navi: NaviState, modifier: Modifier) {
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         if (navi.guiding && navi.destinationName != null) {
-            Text("${navi.destinationName}까지", fontSize = 13.sp, color = CarColors.SubText)
+            Text("${navi.destinationName}까지", fontSize = 15.sp, color = CarColors.SubText)
             Text(routeText(navi), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
             if (navi.waypoints.isNotEmpty()) {
-                Text("경유 ${navi.waypoints.joinToString(", ")}", fontSize = 13.sp, color = CarColors.Green)
+                Text("경유 ${navi.waypoints.joinToString(", ")}", fontSize = 15.sp, color = CarColors.Green)
             }
         } else {
             Text(
@@ -180,7 +180,7 @@ fun JourneyScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("가까운 휴식처", fontWeight = FontWeight.SemiBold, color = CarColors.Text)
-                        Text(sourceText(rest), fontSize = 12.sp, color = CarColors.SubText)
+                        Text(sourceText(rest), fontSize = 14.sp, color = CarColors.SubText)
                     }
                     OutlinedButton(onClick = onSearch, enabled = !rest.searching) {
                         Text(if (rest.searching) "찾는 중..." else if (rest.result == null) "휴식처 찾기" else "다시 찾기")
@@ -253,14 +253,14 @@ private fun RestStopCard(
                 .background(Color(0xFFD9822B))
                 .padding(horizontal = 9.dp, vertical = 3.dp)
         ) {
-            Text("$number", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text("$number", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(stop.name, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = CarColors.Text)
             Text(
                 "약 ${"%.1f".format(stop.distanceM / 1000.0)}km · ${stop.address}",
-                fontSize = 13.sp, color = CarColors.SubText
+                fontSize = 15.sp, color = CarColors.SubText
             )
         }
         Spacer(Modifier.width(10.dp))

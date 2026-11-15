@@ -178,7 +178,7 @@ fun CarMap(pins: List<MapPin>, modifier: Modifier = Modifier) {
                 pins.isEmpty() -> "현재 위치를 기다리는 중..."
                 else -> "© OpenFreeMap © OpenStreetMap"
             },
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = CarColors.SubText,
             modifier = Modifier
                 .align(Alignment.BottomStart)
