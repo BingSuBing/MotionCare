@@ -92,6 +92,30 @@ class SessionWatcher(private val sessionId: String) {
             .addOnFailureListener { e -> Log.e(TAG, "이름 변경 실패: $seat", e) }
     }
 
+    // 휴식처를 경유지로 추가했을 때: 웹 "가까운 휴식 장소" 표시용 (스키마 route.nextRestStop)
+    fun writeNextRestStop(name: String, distanceKm: Double, etaMin: Int) {
+        val data = hashMapOf<String, Any>(
+            "route.nextRestStop" to hashMapOf(
+                "name" to name,
+                "distanceKm" to distanceKm,
+                "etaMin" to etaMin
+            ),
+            "route.updatedAt" to FieldValue.serverTimestamp()
+        )
+        db.document(Paths.session(sessionId)).update(data)
+            .addOnFailureListener { e -> Log.e(TAG, "nextRestStop 기록 실패", e) }
+    }
+
+    // 휴식처에 도착했거나 경로가 취소됐을 때: 웹에 지난 휴식처가 남지 않게 지워요
+    fun clearNextRestStop() {
+        val data = hashMapOf<String, Any?>(
+            "route.nextRestStop" to null,
+            "route.updatedAt" to FieldValue.serverTimestamp()
+        )
+        db.document(Paths.session(sessionId)).update(data)
+            .addOnFailureListener { e -> Log.e(TAG, "nextRestStop 지우기 실패", e) }
+    }
+
     // 차량에 외기/내기 적용이 끝난 뒤 기록
     fun writeAirIntake(recirc: Boolean) {
         val data = hashMapOf<String, Any>(

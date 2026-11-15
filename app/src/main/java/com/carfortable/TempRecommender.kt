@@ -138,11 +138,22 @@ class TempRecommender(
                 "hvacState.reviewedAt" to FieldValue.serverTimestamp(),
                 "hvacState.nextReviewAt" to nextReviewAt
             )
-            if (rec != null && rec.shouldPropose) {
+            if (rec != null) {
                 data["hvacState.medianTemp"] = rec.temp
                 data["hvacState.voteCount"] = rec.votes.size
                 data["hvacState.leadSeat"] = rec.leadSeat
-                data["hvacState.tempStatus"] = TempStatus.PENDING
+                // 제안할 만큼 다르면 pending, 지금 온도와 비슷하면 applied
+                // (applied로 덮어야 예전 pending 제안이 운전자 화면에 남지 않아요)
+                data["hvacState.tempStatus"] =
+                    if (rec.shouldPropose) TempStatus.PENDING else TempStatus.APPLIED
+                data["hvacState.updatedAt"] = FieldValue.serverTimestamp()
+            } else {
+                // 희망 온도가 하나도 없으면(모두 나감 등) 예전 제안을 지워요
+                // (pending이 남으면 운전자 화면에 떠난 탑승자의 추천 온도가 계속 보여요)
+                data["hvacState.medianTemp"] = null
+                data["hvacState.voteCount"] = 0
+                data["hvacState.leadSeat"] = null
+                data["hvacState.tempStatus"] = TempStatus.APPLIED
                 data["hvacState.updatedAt"] = FieldValue.serverTimestamp()
             }
             db.document(Paths.session(sessionId)).update(data)
@@ -151,7 +162,7 @@ class TempRecommender(
             val text = when {
                 rec == null -> "[$reason] 희망 온도 없음"
                 rec.shouldPropose -> "[$reason] 추천 ${rec.temp}℃ 제안 (현재 $current℃, 가중평균 ${"%.2f".format(rec.rawTemp)}, 1위 ${rec.leadSeat})"
-                else -> "[$reason] 추천 ${rec.temp}℃ = 현재와 비슷해서 제안 안 함"
+                else -> "[$reason] 추천 ${rec.temp}℃ = 현재와 비슷해서 제안 안 함 (applied)"
             }
             Log.d(TAG, "추천 온도: $text")
             onStatus?.invoke(text)
